@@ -88,7 +88,7 @@ def render_cohort_inputs() -> dict:
         with tp3:
             tp_monthly_volume = st.slider(
                 "Teampay Card Volume ($/mo)",
-                min_value=10_000, max_value=1_000_000, value=50_000, step=10_000,
+                min_value=10_000, max_value=1_000_000, value=100_000, step=10_000,
                 format="$%d",
                 help="Average monthly card processing volume per Teampay deal.",
             )
