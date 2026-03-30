@@ -177,7 +177,7 @@ def main():
         st.warning("Add your OpenAI API key to `.streamlit/secrets.toml` to enable the AI scenario.")
     else:
         if st.button("Run AI Recommended Scenario", type="primary", use_container_width=True):
-            with st.spinner("AI is testing pricing configurations (7-15 iterations)..."):
+            with st.spinner("AI is testing pricing configurations (5-12 iterations)..."):
                 try:
                     ci = st.session_state.get("cohort_inputs", {})
                     ai_levers, ai_reasoning = run_ai_scenario(

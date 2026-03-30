@@ -514,8 +514,8 @@ def _evaluate_pricing_fn(args: dict, standard, revenue_opt, margin_opt, volumes,
     return "\n".join(lines)
 
 
-_MIN_TESTS = 7
-_MAX_ITERATIONS = 15
+_MIN_TESTS = 5
+_MAX_ITERATIONS = 12
 _MODEL = "gpt-4o-mini"
 
 
@@ -541,6 +541,7 @@ def run_ai_scenario(
     """GPT-4o-mini iteratively tests pricing via function calling, then submits its best.
 
     Returns (lever_dict, reasoning_string).
+    Falls back to best tested config if AI doesn't formally submit.
     """
     client = OpenAI(api_key=api_key)
     context = _build_scenario_context(standard, revenue_opt, margin_opt)
@@ -554,28 +555,27 @@ def run_ai_scenario(
             "You have an `evaluate_pricing` tool — use it to test different pricing configurations "
             "and see the real model results. Each result includes a direct comparison to all three "
             "existing scenarios so you can see exactly where you stand.\n\n"
-            "CRITICAL RULE: You must beat Revenue Optimized on at least ONE metric "
+            "GOAL: Find a unique tradeoff — beat Revenue Optimized on at least ONE metric "
             "AND beat $ Margin Optimized on at least ONE metric. "
-            "Find a unique tradeoff — e.g. nearly the same revenue as Rev Opt but better margin %, "
-            "or nearly the same margin as Margin Opt but more deals and revenue.\n\n"
+            "If you can't beat both, prioritize beating at least one.\n\n"
             f"You MUST test at least {_MIN_TESTS} configurations before submitting. "
-            "MANDATORY: You must test BOTH saas strategies at least once — "
-            "at least one 'discount_remove' test AND at least one 'flat_monthly' test. "
-            "You will be blocked from submitting until both have been tested.\n\n"
+            "MANDATORY: Test BOTH saas strategies at least once.\n\n"
             "STRATEGY TIPS:\n"
             "- flat_monthly at $600/mo gives same win rate as ~76% discount but only 5% churn vs ~13%\n"
             "- Higher ACH rates/fees boost margin % and take rate with modest win rate impact\n"
             "- CC rates revert to standard at Y2, so Y1 CC discounts have limited cost\n"
             "- Lower discount removal = less churn = more Y2/Y3 revenue from retained deals\n\n"
-            "Test at least 7 configs: try discount_remove at 40%, 50%, 60%; flat_monthly at $600-$800; "
-            "vary ACH aggressively (higher BPS, higher fixed fees); try different CC rates. "
-            "Find where you beat both optimizers on at least one metric each."
+            "Test at least 5 configs then submit your best. Don't overthink — submit when you "
+            "have a config you're confident in."
         )},
     ]
 
     tools = [_EVALUATE_TOOL, _SUBMIT_TOOL]
     lb = cfg.LEVER_BOUNDS
     fb = cfg.SAAS_FLAT_MONTHLY_BOUNDS
+
+    best_tested = None
+    best_tested_rev = 0
 
     def _count_tests():
         return sum(
@@ -593,6 +593,56 @@ def run_ai_scenario(
                         args = json.loads(t.function.arguments)
                         strategies.add(args.get("saas_strategy", "discount_remove"))
         return strategies
+
+    def _validate_levers(fn_args):
+        strategy = fn_args.get("saas_strategy", "discount_remove")
+        return {
+            "saas_strategy": strategy,
+            "saas_arr_discount_pct": _clamp(
+                float(fn_args.get("saas_arr_discount_pct", 0.30)),
+                lb["saas_arr_discount_pct"]["min"], lb["saas_arr_discount_pct"]["max"],
+            ),
+            "saas_flat_monthly": _clamp(
+                float(fn_args.get("saas_flat_monthly", 0)),
+                fb["min"], fb["max"],
+            ),
+            "removal_pct": _clamp(
+                float(fn_args.get("removal_pct", 0.25)),
+                lb["removal_pct"]["min"], lb["removal_pct"]["max"],
+            ),
+            "cc_base_rate": _clamp(
+                float(fn_args.get("cc_base_rate", 0.022)),
+                lb["cc_base_rate"]["min"], lb["cc_base_rate"]["max"],
+            ),
+            "cc_amex_rate": _clamp(
+                float(fn_args.get("cc_amex_rate", 0.035)),
+                lb["cc_amex_rate"]["min"], lb["cc_amex_rate"]["max"],
+            ),
+            "ach_accel_pct": _clamp(
+                float(fn_args.get("ach_accel_pct", 0.50)),
+                lb["ach_accel_pct"]["min"], lb["ach_accel_pct"]["max"],
+            ),
+            "ach_accel_bps": _clamp(
+                float(fn_args.get("ach_accel_bps", 0.0035)),
+                lb["ach_accel_bps"]["min"], lb["ach_accel_bps"]["max"],
+            ),
+            "ach_fixed_fee": _clamp(
+                float(fn_args.get("ach_fixed_fee", 2.50)),
+                lb["ach_fixed_fee"]["min"], lb["ach_fixed_fee"]["max"],
+            ),
+            "impl_fee_discount_pct": _clamp(
+                float(fn_args.get("impl_fee_discount_pct", 0.0)),
+                lb["impl_fee_discount_pct"]["min"], lb["impl_fee_discount_pct"]["max"],
+            ),
+        }
+
+    def _parse_revenue(result_str):
+        import re as _re
+        m = _re.search(r"3-Year Revenue: \$([\d,]+)", result_str)
+        return float(m.group(1).replace(",", "")) if m else 0
+
+    rejections = 0
+    _MAX_REJECTIONS = 2
 
     for _ in range(_MAX_ITERATIONS):
         response = _call_openai_with_retry(
@@ -637,11 +687,9 @@ def run_ai_scenario(
                     })
                     continue
 
-                # Run the submitted config through the model to check domination
                 submit_result = _evaluate_pricing_fn(
                     fn_args, standard, revenue_opt, margin_opt, volumes, include_float,
                 )
-                # Parse key metrics from the result string
                 import re as _re
                 _rev_m = _re.search(r"3-Year Revenue: \$([\d,]+)", submit_result)
                 _mar_m = _re.search(r"3-Year Margin: \$([\d,]+) \(([\d.]+)%\)", submit_result)
@@ -664,8 +712,8 @@ def run_ai_scenario(
                     if not beats_any:
                         dominated_by.append(lbl)
 
-                if dominated_by and n_tests < _MAX_ITERATIONS - 1:
-                    # Build specific guidance on what to beat
+                if dominated_by and rejections < _MAX_REJECTIONS:
+                    rejections += 1
                     hints = []
                     for lbl in dominated_by:
                         scen = revenue_opt if "Rev" in lbl else margin_opt
@@ -678,60 +726,18 @@ def run_ai_scenario(
                         "role": "tool",
                         "tool_call_id": tc.id,
                         "content": (
-                            f"REJECTED: You must beat EACH optimizer on at least ONE metric "
-                            f"(revenue, margin $, margin %, or take rate). "
+                            f"REJECTED ({rejections}/{_MAX_REJECTIONS} max): "
                             f"You failed to beat: {', '.join(dominated_by)}.\n"
                             f"Your result: ${ai_rev:,.0f} rev, ${ai_mar:,.0f} margin, "
                             f"{ai_mpct:.1%} margin %, {ai_tr:.2%} take rate.\n"
-                            f"Targets to beat on at least 1 metric each:\n"
-                            + "\n".join(f"  {h}" for h in hints)
-                            + "\n\nTIPS: Try raising ACH rates/fixed fees slightly to boost margin % and take rate. "
-                            "Or try a different SaaS strategy. You need to find a UNIQUE tradeoff "
-                            "where you win somewhere each optimizer doesn't."
+                            f"Targets:\n" + "\n".join(f"  {h}" for h in hints)
+                            + "\n\nTry higher ACH rates or a different SaaS strategy. "
+                            "Submit your best attempt — next rejection will be accepted."
                         ),
                     })
                     continue
 
-                strategy = fn_args.get("saas_strategy", "discount_remove")
-                validated = {
-                    "saas_strategy": strategy,
-                    "saas_arr_discount_pct": _clamp(
-                        float(fn_args.get("saas_arr_discount_pct", 0.30)),
-                        lb["saas_arr_discount_pct"]["min"], lb["saas_arr_discount_pct"]["max"],
-                    ),
-                    "saas_flat_monthly": _clamp(
-                        float(fn_args.get("saas_flat_monthly", 0)),
-                        fb["min"], fb["max"],
-                    ),
-                    "removal_pct": _clamp(
-                        float(fn_args.get("removal_pct", 0.25)),
-                        lb["removal_pct"]["min"], lb["removal_pct"]["max"],
-                    ),
-                    "cc_base_rate": _clamp(
-                        float(fn_args.get("cc_base_rate", 0.022)),
-                        lb["cc_base_rate"]["min"], lb["cc_base_rate"]["max"],
-                    ),
-                    "cc_amex_rate": _clamp(
-                        float(fn_args.get("cc_amex_rate", 0.035)),
-                        lb["cc_amex_rate"]["min"], lb["cc_amex_rate"]["max"],
-                    ),
-                    "ach_accel_pct": _clamp(
-                        float(fn_args.get("ach_accel_pct", 0.50)),
-                        lb["ach_accel_pct"]["min"], lb["ach_accel_pct"]["max"],
-                    ),
-                    "ach_accel_bps": _clamp(
-                        float(fn_args.get("ach_accel_bps", 0.0035)),
-                        lb["ach_accel_bps"]["min"], lb["ach_accel_bps"]["max"],
-                    ),
-                    "ach_fixed_fee": _clamp(
-                        float(fn_args.get("ach_fixed_fee", 2.50)),
-                        lb["ach_fixed_fee"]["min"], lb["ach_fixed_fee"]["max"],
-                    ),
-                    "impl_fee_discount_pct": _clamp(
-                        float(fn_args.get("impl_fee_discount_pct", 0.0)),
-                        lb["impl_fee_discount_pct"]["min"], lb["impl_fee_discount_pct"]["max"],
-                    ),
-                }
+                validated = _validate_levers(fn_args)
                 reasoning = f"Tested {n_tests} configurations across both SaaS strategies."
                 return validated, reasoning
 
@@ -742,5 +748,14 @@ def run_ai_scenario(
                     "tool_call_id": tc.id,
                     "content": result,
                 })
+                rev = _parse_revenue(result)
+                if rev > best_tested_rev:
+                    best_tested_rev = rev
+                    best_tested = dict(fn_args)
+
+    if best_tested:
+        validated = _validate_levers(best_tested)
+        n = _count_tests()
+        return validated, f"Fallback: best of {n} tested configurations (AI did not formally submit)."
 
     raise RuntimeError("AI did not submit a final pricing recommendation within the iteration limit.")
