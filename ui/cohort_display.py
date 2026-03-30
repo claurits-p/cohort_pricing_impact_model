@@ -253,10 +253,15 @@ def render_summary_metrics(
             return s.funnel.deals_won / s.funnel.deals_to_negotiation
         return s.win_rate
 
+    def _saas_3yr(s):
+        return sum(s.cohort_yearly[y].saas_revenue for y in [1, 2, 3])
+
     metric_defs = [
         ("Deals Won", lambda s: str(s.deals_won), lambda s: s.deals_won,
          lambda d: f"{d:+.0f}", True),
         ("3-Year Revenue", lambda s: f"${s.three_year_revenue:,.0f}", lambda s: s.three_year_revenue,
+         lambda d: f"${d:+,.0f}", True),
+        ("SaaS (ACV)", lambda s: f"${_saas_3yr(s):,.0f}", lambda s: _saas_3yr(s),
          lambda d: f"${d:+,.0f}", True),
         ("3-Year Margin", lambda s: f"${s.three_year_margin:,.0f}", lambda s: s.three_year_margin,
          lambda d: f"${d:+,.0f}", True),
@@ -276,7 +281,7 @@ def render_summary_metrics(
         f'(Benchmark — {std.deals_won} deals)</span></div>',
         unsafe_allow_html=True,
     )
-    n_metric_cols = 6 if ai is not None else 5
+    n_metric_cols = 7 if ai is not None else 6
     std_cols = st.columns(n_metric_cols)
     for i, (label, fmt_fn, _, _, _) in enumerate(metric_defs):
         content = (
@@ -286,6 +291,8 @@ def render_summary_metrics(
         )
         if label == "3-Year Revenue":
             content += _yearly_revenue_html(std, _STD_CLR)
+        elif label == "SaaS (ACV)":
+            content += _yearly_saas_html(std, _STD_CLR)
         std_cols[i].markdown(content, unsafe_allow_html=True)
 
     st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
@@ -325,6 +332,8 @@ def render_summary_metrics(
             )
             if label == "3-Year Revenue":
                 content += _yearly_revenue_html(scenario, color)
+            elif label == "SaaS (ACV)":
+                content += _yearly_saas_html(scenario, color)
             row_cols[i].markdown(content, unsafe_allow_html=True)
         st.markdown('<div style="height:4px;"></div>', unsafe_allow_html=True)
 
@@ -334,6 +343,17 @@ def _yearly_revenue_html(scenario: CohortScenario, color: str) -> str:
     y1 = scenario.cohort_yearly[1].total_revenue
     y2 = scenario.cohort_yearly[2].total_revenue
     y3 = scenario.cohort_yearly[3].total_revenue
+    return (
+        f'<div style="font-size:0.95rem;color:{color};opacity:0.75;margin-top:2px;">'
+        f'Y1: ${y1:,.0f}<br>Y2: ${y2:,.0f}<br>Y3: ${y3:,.0f}</div>'
+    )
+
+
+def _yearly_saas_html(scenario: CohortScenario, color: str) -> str:
+    """Return HTML string for Y1/Y2/Y3 SaaS revenue below SaaS (ACV) metric."""
+    y1 = scenario.cohort_yearly[1].saas_revenue
+    y2 = scenario.cohort_yearly[2].saas_revenue
+    y3 = scenario.cohort_yearly[3].saas_revenue
     return (
         f'<div style="font-size:0.95rem;color:{color};opacity:0.75;margin-top:2px;">'
         f'Y1: ${y1:,.0f}<br>Y2: ${y2:,.0f}<br>Y3: ${y3:,.0f}</div>'

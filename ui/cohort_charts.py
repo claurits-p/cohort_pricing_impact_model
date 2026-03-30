@@ -83,15 +83,21 @@ def render_break_even_chart(
     top_cum = _cum_margins(top)
 
     def _find_crossover(base, comp):
+        """Find where comp's cumulative margin first exceeds base.
+
+        Returns (year_float, was_ever_behind).
+        was_ever_behind=False means comp was ahead from Year 1 (no real crossover).
+        """
+        ever_behind = any(comp[i] < base[i] for i in range(1, len(years)))
         for i in range(1, len(years)):
             diff = comp[i] - base[i]
             if diff >= 0:
                 prev_diff = comp[i - 1] - base[i - 1]
                 if prev_diff < 0:
                     frac = -prev_diff / (diff - prev_diff)
-                    return years[i - 1] + frac
-                return float(years[i])
-        return None
+                    return years[i - 1] + frac, True
+                return float(years[i]), ever_behind
+        return None, ever_behind
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -122,27 +128,55 @@ def render_break_even_chart(
             textposition="bottom left", textfont=dict(size=11),
         ))
 
-    ltv_cross = _find_crossover(std_cum, ltv_cum)
-    if ltv_cross is not None:
-        label = f"Revenue break-even: Year {int(ltv_cross)}" if ltv_cross == int(ltv_cross) else f"Revenue break-even: ~Year {ltv_cross:.1f}"
-        fig.add_vline(x=ltv_cross, line_dash="dash", line_color=REV_COLOR,
-                      annotation_text=label, annotation_position="top right",
-                      annotation_font_color=REV_COLOR)
+    def _crossover_label(prefix, cross_year, was_behind):
+        if not was_behind:
+            return f"{prefix}: Ahead from start"
+        if cross_year == int(cross_year):
+            return f"{prefix}: Year {int(cross_year)}"
+        return f"{prefix}: ~Year {cross_year:.1f}"
 
-    top_cross = _find_crossover(std_cum, top_cum)
-    if top_cross is not None and top_cross != ltv_cross:
-        label = f"$ Margin break-even: Year {int(top_cross)}" if top_cross == int(top_cross) else f"$ Margin break-even: ~Year {top_cross:.1f}"
-        fig.add_vline(x=top_cross, line_dash="dash", line_color=MAR_COLOR,
-                      annotation_text=label, annotation_position="bottom right",
-                      annotation_font_color=MAR_COLOR)
+    ltv_cross, ltv_behind = _find_crossover(std_cum, ltv_cum)
+    if ltv_cross is not None:
+        label = _crossover_label("Revenue break-even", ltv_cross, ltv_behind)
+        if ltv_behind:
+            fig.add_vline(x=ltv_cross, line_dash="dash", line_color=REV_COLOR,
+                          annotation_text=label, annotation_position="top right",
+                          annotation_font_color=REV_COLOR)
+        else:
+            fig.add_annotation(
+                x=0.5, y=ltv_cum[1], text=label,
+                showarrow=False, font=dict(color=REV_COLOR, size=11),
+                xanchor="left", yanchor="bottom",
+            )
+
+    top_cross, top_behind = _find_crossover(std_cum, top_cum)
+    if top_cross is not None:
+        label = _crossover_label("$ Margin break-even", top_cross, top_behind)
+        if top_behind:
+            fig.add_vline(x=top_cross, line_dash="dash", line_color=MAR_COLOR,
+                          annotation_text=label, annotation_position="bottom right",
+                          annotation_font_color=MAR_COLOR)
+        else:
+            fig.add_annotation(
+                x=0.5, y=top_cum[1], text=label,
+                showarrow=False, font=dict(color=MAR_COLOR, size=11),
+                xanchor="left", yanchor="top",
+            )
 
     if ai is not None:
-        ai_cross = _find_crossover(std_cum, ai_cum)
-        if ai_cross is not None and ai_cross != ltv_cross and ai_cross != top_cross:
-            label = f"AI break-even: Year {int(ai_cross)}" if ai_cross == int(ai_cross) else f"AI break-even: ~Year {ai_cross:.1f}"
-            fig.add_vline(x=ai_cross, line_dash="dash", line_color=AI_COLOR,
-                          annotation_text=label, annotation_position="top left",
-                          annotation_font_color=AI_COLOR)
+        ai_cross, ai_behind = _find_crossover(std_cum, ai_cum)
+        if ai_cross is not None:
+            label = _crossover_label("AI break-even", ai_cross, ai_behind)
+            if ai_behind:
+                fig.add_vline(x=ai_cross, line_dash="dash", line_color=AI_COLOR,
+                              annotation_text=label, annotation_position="top left",
+                              annotation_font_color=AI_COLOR)
+            else:
+                fig.add_annotation(
+                    x=0.5, y=ai_cum[1], text=label,
+                    showarrow=False, font=dict(color=AI_COLOR, size=11),
+                    xanchor="left", yanchor="bottom",
+                )
 
     fig.update_layout(
         xaxis_title="Year", yaxis_title="Cumulative Margin ($)",
