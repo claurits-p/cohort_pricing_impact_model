@@ -71,25 +71,21 @@ def render_cohort_inputs() -> dict:
         include_upside_std = st.toggle("VAS Fees in Standard", value=True,
             help="Include VAS fees in the Standard scenario.",
             disabled=not include_upside)
-    if not include_float:
-        include_float_std = False
-    if not include_upside:
-        include_upside_std = False
-
-    if include_upside:
-        vs1, vs2 = st.columns(2)
-        with vs1:
+        if include_upside:
             vas_recommended_only = st.toggle("Recommended Only", value=False,
                 help="Show only the 6 recommended VAS fee items instead of all 23.")
-        with vs2:
             upside_total_customers = st.number_input(
                 "Total Active Customers",
                 min_value=100, value=750, step=50,
                 help="Used to convert portfolio-level TAM to per-deal rates.",
             )
-    else:
-        upside_total_customers = 750
-        vas_recommended_only = False
+        else:
+            vas_recommended_only = False
+            upside_total_customers = 750
+    if not include_float:
+        include_float_std = False
+    if not include_upside:
+        include_upside_std = False
 
     st.subheader("Teampay Assumptions")
     include_teampay = st.toggle("Include Teampay", value=True,
