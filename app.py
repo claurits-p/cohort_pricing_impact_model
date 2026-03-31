@@ -47,6 +47,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+import config as cfg
 from ui.cohort_inputs import render_cohort_inputs, render_standard_pricing
 from ui.cohort_engine import run_cohort_comparison, build_ai_scenario
 from ui.cohort_display import (
@@ -188,7 +189,7 @@ def main():
                         quarterly_growth=ci.get("quarterly_growth", 0.02),
                         tp_contract_optin=ci.get("tp_contract_optin", 0.50),
                         tp_actual_usage=ci.get("tp_actual_usage", 0.20),
-                        tp_monthly_volume=ci.get("tp_monthly_volume", 50_000),
+                        tp_monthly_volume=ci.get("tp_monthly_volume", cfg.TEAMPAY_MONTHLY_VOLUME),
                         include_float=ci.get("include_float", True),
                         include_teampay=ci.get("include_teampay", True),
                     )
@@ -260,15 +261,15 @@ def main():
     render_summary_metrics(standard, revenue_opt, margin_opt, ai=ai_scenario)
 
     st.divider()
-    render_annualized_impact(standard, revenue_opt, margin_opt, ai=ai_scenario)
-
-    st.divider()
     render_break_even_chart(standard, revenue_opt, margin_opt, ai=ai_scenario)
 
     render_cumulative_revenue_chart(standard, revenue_opt, margin_opt, ai=ai_scenario)
 
     st.divider()
     render_revenue_composition(standard, revenue_opt, margin_opt, ai=ai_scenario)
+
+    st.divider()
+    render_annualized_impact(standard, revenue_opt, margin_opt, ai=ai_scenario)
 
 
 

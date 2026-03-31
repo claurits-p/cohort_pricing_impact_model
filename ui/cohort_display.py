@@ -732,73 +732,254 @@ def render_annualized_impact(
     std: CohortScenario, ltv: CohortScenario, top: CohortScenario,
     ai: CohortScenario | None = None,
 ) -> None:
-    """Staggered multi-cohort impact: 4 quarterly cohorts over a 3-year window.
+    """Staggered multi-cohort impact shown as a cumulative revenue timeline.
 
-    Q1 cohort gets full Y1+Y2+Y3; Q2 gets Y1+Y2+75% Y3; Q3 gets Y1+Y2+50% Y3;
-    Q4 gets Y1+Y2+25% Y3.  Shows staggered Revenue, Margin, and Margin %
-    for Standard and each optimized scenario.
+    4 quarterly cohorts enter over Q1-Q4. Each cohort generates quarterly
+    revenue (Y1/4, Y2/4, Y3/4). The chart shows how total revenue builds
+    as cohorts stack up, highlighting the compounding advantage of better pricing.
     """
+    import plotly.graph_objects as go
+
     st.markdown("**Annualized Cohort Impact** *(4 quarterly cohorts, staggered 3-year window)*")
+
+    def _quarterly_revenue(scenario):
+        """Break Y1/Y2/Y3 into 12 quarterly values using real monthly volume weights.
+
+        Volume ramps within each year (especially Y1). We use the monthly
+        Vol/MRR ratios to compute what fraction of each year's total volume
+        falls in each quarter, then distribute that year's revenue accordingly.
+        SaaS + impl are spread evenly (subscription), processing revenue
+        follows the volume weight curve.
+        """
+        from models.volume_forecast import MONTHLY_VOL_MRR
+
+        q_rev = []
+        for y in [1, 2, 3]:
+            m_start = (y - 1) * 12 + 1
+            year_monthly = [MONTHLY_VOL_MRR.get(m, 0) for m in range(m_start, m_start + 12)]
+            year_total_ratio = sum(year_monthly)
+
+            qtr_weights = []
+            for q in range(4):
+                qw = sum(year_monthly[q * 3: q * 3 + 3])
+                qtr_weights.append(qw / year_total_ratio if year_total_ratio > 0 else 0.25)
+
+            cy = scenario.cohort_yearly[y]
+            saas_q = cy.saas_revenue / 4
+            impl_q = cy.impl_fee_revenue / 4
+            tp_q = (cy.teampay_saas_revenue + cy.teampay_processing_revenue) / 4
+
+            processing_rev = cy.cc_revenue + cy.ach_revenue + cy.bank_revenue + cy.float_income
+
+            for q in range(4):
+                q_rev.append(saas_q + impl_q + tp_q + processing_rev * qtr_weights[q])
+
+        return q_rev
+
+    # ── Stacked area: individual cohort layers ──
+    scenario_options = {
+        "Standard": (std, _STD_CLR),
+        "Revenue Optimized": (ltv, _REV_CLR),
+        "$ Margin Optimized": (top, _MAR_CLR),
+    }
+    if ai is not None:
+        scenario_options["AI Recommended"] = (ai, _AI_CLR)
+
+    selected = st.selectbox(
+        "Select scenario to view cohort build-up",
+        list(scenario_options.keys()),
+        index=1,
+        key="annualized_cohort_selector",
+    )
+    sel_scenario, sel_color = scenario_options[selected]
+    cohort_q = _quarterly_revenue(sel_scenario)
+
+    q_labels = [f"Q{((i)%4)+1} Y{((i)//4)+1}" for i in range(12)]
+    cohort_names = ["Q1 Cohort", "Q2 Cohort", "Q3 Cohort", "Q4 Cohort"]
+    opacity_levels = [1.0, 0.75, 0.55, 0.40]
+
+    fig_stack = go.Figure()
+    for c_idx in range(4):
+        c_values = []
+        for q_idx in range(12):
+            age = q_idx - c_idx
+            if 0 <= age < len(cohort_q):
+                c_values.append(cohort_q[age])
+            else:
+                c_values.append(0)
+        fig_stack.add_trace(go.Scatter(
+            x=q_labels, y=c_values,
+            name=cohort_names[c_idx],
+            mode="lines",
+            line=dict(width=0.5, color=sel_color),
+            fillcolor=f"rgba({int(sel_color[1:3],16)},{int(sel_color[3:5],16)},{int(sel_color[5:7],16)},{opacity_levels[c_idx]})",
+            fill="tonexty" if c_idx > 0 else "tozeroy",
+            stackgroup="one",
+            hovertemplate="%{fullData.name}: $%{y:,.0f}<extra></extra>",
+        ))
+
+    total_by_q = []
+    for q_idx in range(12):
+        t = sum(
+            cohort_q[q_idx - c] if 0 <= (q_idx - c) < len(cohort_q) else 0
+            for c in range(4)
+        )
+        total_by_q.append(t)
+
+    fig_stack.add_annotation(
+        x=q_labels[-1], y=total_by_q[-1],
+        text=f"${total_by_q[-1]:,.0f}/qtr",
+        showarrow=True, arrowhead=2, arrowcolor=sel_color,
+        font=dict(color=sel_color, size=12, weight="bold"),
+        yshift=20,
+    )
+
+    fig_stack.update_layout(
+        title=dict(text=f"{selected} — Quarterly Revenue by Cohort", font=dict(size=14)),
+        xaxis_title="Quarter",
+        yaxis_title="Quarterly Revenue ($)",
+        xaxis=dict(tickangle=-45),
+        yaxis=dict(tickformat="$,.0f"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(t=60, b=60),
+        height=400,
+        plot_bgcolor="white",
+        hovermode="x unified",
+    )
+    fig_stack.update_yaxes(gridcolor="rgba(0,0,0,0.06)")
+    st.plotly_chart(fig_stack, use_container_width=True)
+
+    # ── Cumulative comparison line chart ──
+    st.caption(
+        "Cumulative revenue across all cohorts — the gap between lines "
+        "is the compounding value of better pricing."
+    )
+
+    def _build_cumulative(scenario):
+        cq = _quarterly_revenue(scenario)
+        quarters = list(range(1, 13))
+        cumulative = []
+        running = 0.0
+        for q_idx in range(12):
+            q_total = sum(
+                cq[q_idx - c] if 0 <= (q_idx - c) < len(cq) else 0
+                for c in range(4)
+            )
+            running += q_total
+            cumulative.append(running)
+        return quarters, cumulative
+
+    std_q, std_cum = _build_cumulative(std)
+    ltv_q, ltv_cum = _build_cumulative(ltv)
+    top_q, top_cum = _build_cumulative(top)
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=std_q, y=std_cum, mode="lines+markers",
+        name="Standard", line=dict(color=_STD_CLR, width=3),
+        marker=dict(size=5),
+    ))
+    fig.add_trace(go.Scatter(
+        x=ltv_q, y=ltv_cum, mode="lines+markers",
+        name="Revenue Optimized", line=dict(color=_REV_CLR, width=3),
+        marker=dict(size=5),
+    ))
+    fig.add_trace(go.Scatter(
+        x=top_q, y=top_cum, mode="lines+markers",
+        name="$ Margin Optimized", line=dict(color=_MAR_CLR, width=3),
+        marker=dict(size=5),
+    ))
+
+    if ai is not None:
+        ai_q, ai_cum = _build_cumulative(ai)
+        fig.add_trace(go.Scatter(
+            x=ai_q, y=ai_cum, mode="lines+markers",
+            name="AI Recommended", line=dict(color=_AI_CLR, width=3),
+            marker=dict(size=5),
+        ))
+
+    for label, cum, color in [
+        ("Standard", std_cum, _STD_CLR),
+        ("Revenue Opt", ltv_cum, _REV_CLR),
+        ("$ Margin Opt", top_cum, _MAR_CLR),
+    ]:
+        fig.add_annotation(
+            x=12, y=cum[-1],
+            text=f"${cum[-1]:,.0f}",
+            showarrow=False,
+            font=dict(color=color, size=12),
+            xanchor="left", xshift=8,
+        )
+
+    if ai is not None:
+        fig.add_annotation(
+            x=12, y=ai_cum[-1],
+            text=f"${ai_cum[-1]:,.0f}",
+            showarrow=False,
+            font=dict(color=_AI_CLR, size=12),
+            xanchor="left", xshift=8,
+        )
+
+    fig.update_layout(
+        xaxis_title="Quarter",
+        yaxis_title="Cumulative Revenue ($)",
+        xaxis=dict(
+            tickmode="array",
+            tickvals=list(range(1, 13)),
+            ticktext=[f"Q{((i-1)%4)+1} Y{((i-1)//4)+1}" for i in range(1, 13)],
+            tickangle=-45,
+        ),
+        yaxis=dict(tickformat="$,.0f"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(t=50, b=60, r=100),
+        height=400,
+        plot_bgcolor="white",
+        hovermode="x unified",
+    )
+
+    fig.update_yaxes(gridcolor="rgba(0,0,0,0.06)")
+    st.plotly_chart(fig, use_container_width=True)
 
     y3_weights = [1.0, 0.75, 0.50, 0.25]
 
-    def _staggered_totals(scenario: CohortScenario) -> tuple[float, float]:
-        y1_rev = scenario.cohort_yearly[1].total_revenue
-        y2_rev = scenario.cohort_yearly[2].total_revenue
-        y3_rev = scenario.cohort_yearly[3].total_revenue
-        y1_cost = scenario.cohort_yearly[1].total_cost
-        y2_cost = scenario.cohort_yearly[2].total_cost
-        y3_cost = scenario.cohort_yearly[3].total_cost
+    def _staggered_totals(scenario):
+        y1_r = scenario.cohort_yearly[1].total_revenue
+        y2_r = scenario.cohort_yearly[2].total_revenue
+        y3_r = scenario.cohort_yearly[3].total_revenue
+        y1_c = scenario.cohort_yearly[1].total_cost
+        y2_c = scenario.cohort_yearly[2].total_cost
+        y3_c = scenario.cohort_yearly[3].total_cost
+        tr = sum(y1_r + y2_r + y3_r * w for w in y3_weights)
+        tc = sum(y1_c + y2_c + y3_c * w for w in y3_weights)
+        return tr, tc
 
-        total_rev = 0.0
-        total_cost = 0.0
-        for w in y3_weights:
-            total_rev += y1_rev + y2_rev + y3_rev * w
-            total_cost += y1_cost + y2_cost + y3_cost * w
-        return total_rev, total_cost
-
-    std_rev, std_cost = _staggered_totals(std)
-    ltv_rev, ltv_cost = _staggered_totals(ltv)
-    top_rev, top_cost = _staggered_totals(top)
-
-    std_margin = std_rev - std_cost
-    ltv_margin = ltv_rev - ltv_cost
-    top_margin = top_rev - top_cost
-
-    std_mpct = std_margin / std_rev if std_rev > 0 else 0
-    ltv_mpct = ltv_margin / ltv_rev if ltv_rev > 0 else 0
-    top_mpct = top_margin / top_rev if top_rev > 0 else 0
-
-    rev_row = {
-        "Metric": "Revenue",
-        "Standard": f"${std_rev:,.0f}",
-        "Revenue Optimized": f"${ltv_rev:,.0f}",
-        "$ Margin Optimized": f"${top_rev:,.0f}",
-    }
-    margin_row = {
-        "Metric": "Margin",
-        "Standard": f"${std_margin:,.0f}",
-        "Revenue Optimized": f"${ltv_margin:,.0f}",
-        "$ Margin Optimized": f"${top_margin:,.0f}",
-    }
-    mpct_row = {
-        "Metric": "Margin %",
-        "Standard": f"{std_mpct:.1%}",
-        "Revenue Optimized": f"{ltv_mpct:.1%}",
-        "$ Margin Optimized": f"{top_mpct:.1%}",
-    }
-
+    scenarios = [
+        ("Standard", std, _STD_CLR),
+        ("Revenue Optimized", ltv, _REV_CLR),
+        ("$ Margin Optimized", top, _MAR_CLR),
+    ]
     if ai is not None:
-        ai_rev, ai_cost = _staggered_totals(ai)
-        ai_margin = ai_rev - ai_cost
-        ai_mpct = ai_margin / ai_rev if ai_rev > 0 else 0
-        rev_row["AI Recommended"] = f"${ai_rev:,.0f}"
-        margin_row["AI Recommended"] = f"${ai_margin:,.0f}"
-        mpct_row["AI Recommended"] = f"{ai_mpct:.1%}"
+        scenarios.append(("AI Recommended", ai, _AI_CLR))
 
-    rows = [rev_row, margin_row, mpct_row]
-
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    cols = st.columns(len(scenarios))
+    for col, (label, scenario, color) in zip(cols, scenarios):
+        rev, cost = _staggered_totals(scenario)
+        margin = rev - cost
+        mpct = margin / rev if rev > 0 else 0
+        with col:
+            st.markdown(
+                f'<div style="border-left:3px solid {color};padding:4px 10px;">'
+                f'<div style="color:{color};font-weight:700;font-size:0.95rem;">{label}</div>'
+                f'<div style="font-size:0.85rem;color:#808495;">Revenue</div>'
+                f'<div style="font-size:1.15rem;font-weight:600;">${rev:,.0f}</div>'
+                f'<div style="font-size:0.85rem;color:#808495;">Margin</div>'
+                f'<div style="font-size:1.15rem;font-weight:600;">${margin:,.0f}</div>'
+                f'<div style="font-size:0.85rem;color:#808495;">Margin %</div>'
+                f'<div style="font-size:1.15rem;font-weight:600;">{mpct:.1%}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
 
 def render_per_deal_comparison(

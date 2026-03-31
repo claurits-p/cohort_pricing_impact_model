@@ -253,16 +253,15 @@ def run_cohort_comparison(
     std_yearly = compute_three_year_financials(volumes, std_pricing, include_float=include_float)
     std_ret = compute_retention_factors(std_pricing, quarterly_growth)
 
-    std_tp_optin = 0.10 if include_teampay else 0.0
-    std_tp_usage = 1.0 if include_teampay else 0.0
+    opt_tp_optin = tp_contract_optin if include_teampay else 0.0
+    opt_tp_usage = tp_actual_usage if include_teampay else 0.0
 
     standard = _build_cohort_scenario(
         "Standard Pricing", std_deals, current_win_rate,
         std_pricing, std_yearly, volumes,
         ret_factors=std_ret,
-        tp_optin=std_tp_optin, tp_usage=std_tp_usage,
+        tp_optin=opt_tp_optin, tp_usage=opt_tp_usage,
         tp_monthly_vol=tp_monthly_volume,
-        tp_free_y1_saas=False,
     )
     standard.funnel = std_funnel
 
@@ -276,9 +275,6 @@ def run_cohort_comparison(
     rev_funnel = compute_funnel(sqls_per_quarter, rev_wp, current_win_rate)
     rev_deals = rev_funnel.deals_won
     rev_ret = compute_retention_factors(rev_pricing, quarterly_growth)
-
-    opt_tp_optin = tp_contract_optin if include_teampay else 0.0
-    opt_tp_usage = tp_actual_usage if include_teampay else 0.0
 
     revenue_opt = _build_cohort_scenario(
         "Revenue Optimized", rev_deals, rev_wp,
@@ -363,11 +359,6 @@ def build_ai_scenario(
     ai_wp = compute_win_rate(ai_pricing)
     ai_ret = compute_retention_factors(ai_pricing, quarterly_growth)
 
-    per_deal_arr = standard.per_deal_pricing.saas_arr_list
-    volumes = forecast_volume_y1_y3(
-        standard.cohort_yearly[1].saas_revenue / standard.deals_won
-        if standard.deals_won > 0 else per_deal_arr
-    )
     volumes = standard.per_deal_volumes
 
     ai_yearly = compute_three_year_financials(volumes, ai_pricing, include_float=include_float)
