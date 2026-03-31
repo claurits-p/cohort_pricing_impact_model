@@ -1045,7 +1045,10 @@ def render_upside_breakdown(
     """Stacked bar chart showing VAS fee revenue by line item per scenario."""
     import plotly.graph_objects as go
 
-    has_upside = std.upside_detail is not None and any(std.upside_detail.values())
+    has_upside = any(
+        s.upside_detail is not None and any(s.upside_detail.values())
+        for s in [std, ltv, top] + ([ai] if ai else [])
+    )
     if not has_upside:
         return
 

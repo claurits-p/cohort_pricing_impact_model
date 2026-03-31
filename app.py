@@ -280,7 +280,11 @@ def main():
     st.divider()
     render_annualized_impact(standard, revenue_opt, margin_opt, ai=ai_scenario)
 
-    if standard.upside_detail:
+    has_vas = any(
+        s.upside_detail for s in [standard, revenue_opt, margin_opt]
+        if s is not None
+    )
+    if has_vas:
         st.divider()
         render_upside_breakdown(standard, revenue_opt, margin_opt, ai=ai_scenario)
 
