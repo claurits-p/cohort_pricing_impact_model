@@ -40,20 +40,18 @@ def render_cohort_inputs() -> dict:
         )
 
     st.subheader("Churn & Growth")
-    st.caption(
-        "Churn is now driven by Y2 price increase (5% annual base → scales with removal). "
-        "Growth offsets churn each quarter."
-    )
-    ch1, ch2 = st.columns(2)
-    with ch1:
+    cg1, cg2, cg3 = st.columns([2, 1, 2])
+    with cg1:
         st.markdown(
-            f"**Base Annual Churn:** {cfg.CHURN_BASE_ANNUAL:.0%} "
-            f"(+{cfg.CHURN_PER_PCT_INCREASE*100:.2f}pp per 1% price increase, "
-            f"capped at {cfg.CHURN_ANNUAL_CAP:.0%})"
+            f'<span style="font-size:0.875rem;">'
+            f"Churn driven by Y2 price increase — {cfg.CHURN_BASE_ANNUAL:.0%} base "
+            f"(+{cfg.CHURN_PER_PCT_INCREASE*100:.2f}pp per 1% increase, "
+            f"cap {cfg.CHURN_ANNUAL_CAP:.0%}). Growth offsets churn."
+            f'</span>',
+            unsafe_allow_html=True,
         )
-    with ch2:
         quarterly_growth = st.number_input(
-            "Quarterly Growth Rate (%)",
+            "Quarterly Growth %",
             min_value=0.0, max_value=20.0, value=2.0, step=0.5,
             format="%.1f",
             help="Revenue growth per surviving customer each quarter. Offsets churn.",
@@ -63,7 +61,32 @@ def render_cohort_inputs() -> dict:
     ms1, ms2 = st.columns(2)
     with ms1:
         include_float = st.toggle("Include Float Revenue", value=False,
-            help="Toggle float income on/off for all three scenarios.")
+            help="Toggle float income on/off for optimized scenarios.")
+        include_float_std = st.toggle("Float in Standard", value=False,
+            help="Include float income in the Standard scenario.",
+            disabled=not include_float)
+    with ms2:
+        include_upside = st.toggle("Include VAS Fees", value=True,
+            help="Add value-added service fees (payout fee, seat fee, "
+                 "dispute threshold, payment failures, account updater, min volume penalties).")
+        include_upside_std = st.toggle("VAS Fees in Standard", value=True,
+            help="Include VAS fees in the Standard scenario.",
+            disabled=not include_upside)
+    if not include_float:
+        include_float_std = False
+    if not include_upside:
+        include_upside_std = False
+
+    if include_upside:
+        ms3, _, _ = st.columns([2, 1, 2])
+        with ms3:
+            upside_total_customers = st.number_input(
+                "Total Active Customers",
+                min_value=100, value=750, step=50,
+                help="Used to convert portfolio-level TAM to per-deal rates.",
+            )
+    else:
+        upside_total_customers = 750
 
     st.subheader("Teampay Assumptions")
     include_teampay = st.toggle("Include Teampay", value=True,
@@ -110,7 +133,11 @@ def render_cohort_inputs() -> dict:
         "tp_actual_usage": tp_actual_usage,
         "tp_monthly_volume": tp_monthly_volume,
         "include_float": include_float,
+        "include_float_std": include_float_std,
         "include_teampay": include_teampay,
+        "include_upside": include_upside,
+        "include_upside_std": include_upside_std,
+        "upside_total_customers": upside_total_customers,
     }
 
 

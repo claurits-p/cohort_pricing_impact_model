@@ -24,6 +24,7 @@ from models.win_probability import (
     compute_retention_factors,
 )
 from models.funnel_model import FunnelResult, compute_funnel, compute_standard_funnel
+from models.upside_model import UpsideYear, compute_upside_per_deal
 from models.revenue_model import PricingScenario
 import config as cfg
 
@@ -46,6 +47,7 @@ class CohortYearMetrics:
     margin: float
     margin_pct: float
     take_rate: float
+    upside_revenue: float = 0.0
 
 
 @dataclass
@@ -63,6 +65,7 @@ class CohortScenario:
     three_year_take_rate: float
     lever_changes: dict | None = None
     funnel: FunnelResult | None = None
+    upside_detail: dict | None = None
 
 
 def _simple_retention_factor(year: int, quarterly_churn: float = 0.02) -> float:
@@ -110,13 +113,17 @@ def _scale_yearly(
     tp_usage: float = 0.0,
     tp_monthly_vol: float = 50_000,
     tp_free_y1_saas: bool = True,
-) -> dict[int, CohortYearMetrics]:
+    include_upside: bool = False,
+    upside_total_customers: int = cfg.UPSIDE_TOTAL_CUSTOMERS,
+    per_deal_volumes: dict | None = None,
+) -> tuple[dict[int, CohortYearMetrics], dict | None]:
     if ret_factors is None:
         ret_factors = {y: _simple_retention_factor(y, quarterly_churn) for y in [1, 2, 3]}
 
     tp_ret = {1: ret_factors[1], 2: ret_factors[2], 3: ret_factors[3]}
 
     result = {}
+    upside_detail: dict | None = {} if include_upside else None
     for y, yr in yearly.items():
         retention = ret_factors[y]
         active = deals * retention
@@ -134,7 +141,20 @@ def _scale_yearly(
         bank_rev = yr.bank_network_revenue * active
         float_inc = yr.float_income * active
 
-        rev = base_rev + tp_rev
+        up_rev = 0.0
+        if include_upside and per_deal_volumes is not None:
+            up = compute_upside_per_deal(per_deal_volumes[y], upside_total_customers)
+            up_rev = up.total * active
+            upside_detail[y] = {
+                "Standard Payout Fee": up.payout_fee * active,
+                "Per-User / Seat Fee": up.seat_fee * active,
+                "Dispute Threshold Fee": up.dispute_threshold_fee * active,
+                "Payment Failures": up.payment_failure_fee * active,
+                "Account Updater Fee": up.account_updater_fee * active,
+                "Min Volume Penalties": up.min_volume_penalty * active,
+            }
+
+        rev = base_rev + tp_rev + up_rev
         cost = base_cost + tp_cost
         margin = rev - cost
         mpct = margin / rev if rev > 0 else 0
@@ -157,8 +177,9 @@ def _scale_yearly(
             margin=margin,
             margin_pct=mpct,
             take_rate=tr,
+            upside_revenue=up_rev,
         )
-    return result
+    return result, upside_detail
 
 
 def _build_cohort_scenario(
@@ -175,12 +196,16 @@ def _build_cohort_scenario(
     tp_usage: float = 0.0,
     tp_monthly_vol: float = 50_000,
     tp_free_y1_saas: bool = True,
+    include_upside: bool = False,
+    upside_total_customers: int = cfg.UPSIDE_TOTAL_CUSTOMERS,
 ) -> CohortScenario:
-    cohort_yearly = _scale_yearly(
+    cohort_yearly, upside_detail = _scale_yearly(
         per_deal_yearly, deals_won,
         ret_factors=ret_factors, quarterly_churn=quarterly_churn,
         tp_optin=tp_optin, tp_usage=tp_usage, tp_monthly_vol=tp_monthly_vol,
         tp_free_y1_saas=tp_free_y1_saas,
+        include_upside=include_upside, upside_total_customers=upside_total_customers,
+        per_deal_volumes=per_deal_volumes,
     )
     total_rev = sum(cy.total_revenue for cy in cohort_yearly.values())
     total_margin = sum(cy.margin for cy in cohort_yearly.values())
@@ -188,7 +213,7 @@ def _build_cohort_scenario(
         cy.total_revenue / cy.take_rate
         for cy in cohort_yearly.values() if cy.take_rate > 0
     )
-    return CohortScenario(
+    scenario = CohortScenario(
         name=name,
         deals_won=deals_won,
         win_rate=wr,
@@ -202,6 +227,8 @@ def _build_cohort_scenario(
         three_year_take_rate=total_rev / total_vol if total_vol > 0 else 0,
         lever_changes=lever_changes,
     )
+    scenario.upside_detail = upside_detail
+    return scenario
 
 
 def run_cohort_comparison(
@@ -216,7 +243,11 @@ def run_cohort_comparison(
     tp_actual_usage: float = 0.20,
     tp_monthly_volume: float = 50_000,
     include_float: bool = True,
+    include_float_std: bool = True,
     include_teampay: bool = True,
+    include_upside: bool = False,
+    include_upside_std: bool = False,
+    upside_total_customers: int = cfg.UPSIDE_TOTAL_CUSTOMERS,
 ) -> tuple[CohortScenario, CohortScenario, CohortScenario, str]:
     """
     Run Standard + two optimizer scenarios with full funnel model.
@@ -250,7 +281,7 @@ def run_cohort_comparison(
         saas_strategy="discount_remove",
     )
     std_pricing.removal_pct = standard_pricing_inputs.get("removal_pct", 0.25)
-    std_yearly = compute_three_year_financials(volumes, std_pricing, include_float=include_float)
+    std_yearly = compute_three_year_financials(volumes, std_pricing, include_float=include_float_std)
     std_ret = compute_retention_factors(std_pricing, quarterly_growth)
 
     opt_tp_optin = tp_contract_optin if include_teampay else 0.0
@@ -262,6 +293,7 @@ def run_cohort_comparison(
         ret_factors=std_ret,
         tp_optin=opt_tp_optin, tp_usage=opt_tp_usage,
         tp_monthly_vol=tp_monthly_volume,
+        include_upside=include_upside_std, upside_total_customers=upside_total_customers,
     )
     standard.funnel = std_funnel
 
@@ -282,6 +314,7 @@ def run_cohort_comparison(
         ret_factors=rev_ret,
         tp_optin=opt_tp_optin, tp_usage=opt_tp_usage,
         tp_monthly_vol=tp_monthly_volume,
+        include_upside=include_upside, upside_total_customers=upside_total_customers,
     )
     revenue_opt.funnel = rev_funnel
 
@@ -302,6 +335,7 @@ def run_cohort_comparison(
         ret_factors=mar_ret,
         tp_optin=opt_tp_optin, tp_usage=opt_tp_usage,
         tp_monthly_vol=tp_monthly_volume,
+        include_upside=include_upside, upside_total_customers=upside_total_customers,
     )
     margin_opt.funnel = mar_funnel
 
@@ -330,6 +364,8 @@ def build_ai_scenario(
     tp_monthly_volume: float = 50_000,
     include_float: bool = True,
     include_teampay: bool = True,
+    include_upside: bool = False,
+    upside_total_customers: int = cfg.UPSIDE_TOTAL_CUSTOMERS,
 ) -> CohortScenario:
     """Build a full CohortScenario from AI-proposed pricing levers.
 
@@ -388,6 +424,7 @@ def build_ai_scenario(
         ret_factors=ai_ret,
         tp_optin=opt_tp_optin, tp_usage=opt_tp_usage,
         tp_monthly_vol=tp_monthly_volume,
+        include_upside=include_upside, upside_total_customers=upside_total_customers,
     )
     scenario.funnel = ai_funnel
     return scenario

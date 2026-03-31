@@ -153,3 +153,31 @@ TEAMPAY_PROCESSING_RATE = 0.023    # 2.3% per transaction
 TEAMPAY_PROCESSING_MARGIN = 0.27   # 27% margin on processing
 TEAMPAY_MONTHLY_VOLUME = 100_000   # $100k/month per Teampay deal (Y1 at 50% ramp)
 TEAMPAY_PROCESSING_GROWTH = 0.03   # 3% annual growth on processing volume
+
+# ── Upside Revenue Streams ──────────────────────────────────
+# Derived from portfolio-level TAM estimates, converted to per-deal
+# using total active customers as denominator.
+UPSIDE_TOTAL_CUSTOMERS = 750
+
+# 1. Standard Payout Fee: 10bps on all payment volume
+UPSIDE_PAYOUT_BPS = 0.001
+
+# 2. Per-User / Seat Fee: $50/user/month
+UPSIDE_TOTAL_USERS = 2_000
+UPSIDE_SEAT_FEE_MONTHLY = 50
+
+# 3. Dispute Threshold Fee: $500/month for customers exceeding 2% dispute rate
+UPSIDE_DISPUTE_CUSTOMERS = 70
+UPSIDE_DISPUTE_FEE_MONTHLY = 500
+
+# 4. Payment Failures: $0.50 per failed payment
+UPSIDE_AVG_CARD_TXN_SIZE = 1_150
+UPSIDE_PAYMENT_FAILURE_RATE = 0.108
+UPSIDE_PAYMENT_FAILURE_FEE = 0.50
+
+# 5. Account Updater: $0.20 per card txn, 50% opt-in
+UPSIDE_ACCOUNT_UPDATER_OPTIN = 0.50
+UPSIDE_ACCOUNT_UPDATER_FEE = 0.20
+
+# 6. Minimum Volume Penalties: $10K MRR across portfolio
+UPSIDE_MIN_VOLUME_PENALTY_MRR = 10_000

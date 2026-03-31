@@ -1028,3 +1028,83 @@ def render_per_deal_comparison(
         "Mar Margin": f"${top_3yr_m:,.0f}",
     })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
+def render_upside_breakdown(
+    std: CohortScenario, ltv: CohortScenario, top: CohortScenario,
+    ai: CohortScenario | None = None,
+) -> None:
+    """Stacked bar chart showing upside revenue by line item per scenario."""
+    import plotly.graph_objects as go
+
+    has_upside = std.upside_detail is not None and any(std.upside_detail.values())
+    if not has_upside:
+        return
+
+    st.markdown("**Value-Added Services Fees** *(3-year total per cohort, by line item)*")
+
+    items = [
+        ("Standard Payout Fee", "#E67E22"),
+        ("Per-User / Seat Fee", "#F39C12"),
+        ("Dispute Threshold Fee", "#D35400"),
+        ("Payment Failures", "#E74C3C"),
+        ("Account Updater Fee", "#C0392B"),
+        ("Min Volume Penalties", "#8E44AD"),
+    ]
+
+    scenarios = [
+        ("Standard", std, _STD_CLR),
+        ("Revenue Optimized", ltv, _REV_CLR),
+        ("$ Margin Optimized", top, _MAR_CLR),
+    ]
+    if ai is not None:
+        scenarios.append(("AI Recommended", ai, _AI_CLR))
+
+    x_labels = [s[0] for s in scenarios]
+
+    fig = go.Figure()
+    for item_name, item_color in items:
+        vals = []
+        for _, s, _ in scenarios:
+            total = sum(
+                (s.upside_detail.get(y, {}) if s.upside_detail else {}).get(item_name, 0)
+                for y in [1, 2, 3]
+            )
+            vals.append(total)
+        texts = [f"${v:,.0f}" if v > 20_000 else "" for v in vals]
+        fig.add_trace(go.Bar(
+            x=x_labels, y=vals,
+            name=item_name, marker_color=item_color,
+            text=texts, textposition="inside",
+            textfont=dict(color="white", size=11),
+        ))
+
+    bar_totals = []
+    for _, s, _ in scenarios:
+        bar_totals.append(sum(s.cohort_yearly[y].upside_revenue for y in [1, 2, 3]))
+
+    for i, (label, total) in enumerate(zip(x_labels, bar_totals)):
+        fig.add_annotation(
+            x=label, y=total,
+            text=f"<b>${total:,.0f}</b>",
+            showarrow=False, yshift=14,
+            font=dict(size=13, color=scenarios[i][2]),
+        )
+
+    fig.update_layout(
+        barmode="stack",
+        yaxis=dict(tickformat="$,.0f", title="3-Year VAS Fee Revenue"),
+        xaxis=dict(
+            tickfont=dict(size=13, weight="bold"),
+            tickvals=list(range(len(x_labels))),
+            ticktext=[
+                f'<span style="color:{scenarios[i][2]}">{lab}</span>'
+                for i, lab in enumerate(x_labels)
+            ],
+        ),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=12)),
+        margin=dict(t=50, b=40), height=450,
+        plot_bgcolor="white",
+    )
+    fig.update_yaxes(gridcolor="rgba(0,0,0,0.06)")
+    st.plotly_chart(fig, use_container_width=True)

@@ -259,14 +259,15 @@ def render_revenue_composition(
     """Stacked bar showing revenue mix by year for all three or four scenarios."""
     st.markdown("**Revenue Composition by Year**")
 
-    categories = ["SaaS", "CC", "ACH", "Float", "Impl Fee", "TP SaaS", "TP Proc"]
-    colors = ["#3498DB", "#1B6AC9", "#2980B9", "#1ABC9C", "#95A5A6", "#9B59B6", "#8E44AD"]
+    categories = ["SaaS", "CC", "ACH", "Float", "Impl Fee", "TP SaaS", "TP Proc", "VAS Fees"]
+    colors = ["#3498DB", "#1B6AC9", "#2980B9", "#1ABC9C", "#95A5A6", "#9B59B6", "#8E44AD", "#E67E22"]
 
     def _year_vals(s: CohortScenario, y: int) -> list[float]:
         cy = s.cohort_yearly[y]
         return [cy.saas_revenue, cy.cc_revenue, cy.ach_revenue,
                 cy.float_income, cy.impl_fee_revenue,
-                cy.teampay_saas_revenue, cy.teampay_processing_revenue]
+                cy.teampay_saas_revenue, cy.teampay_processing_revenue,
+                cy.upside_revenue]
 
     if ai is not None:
         x_labels = [

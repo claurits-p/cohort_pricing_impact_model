@@ -58,6 +58,7 @@ from ui.cohort_display import (
     render_scenario_header,
     render_pricing_comparison,
     render_cost_to_collect_ar,
+    render_upside_breakdown,
 )
 from ui.cohort_charts import (
     render_break_even_chart,
@@ -113,7 +114,11 @@ def main():
                 tp_actual_usage=cohort["tp_actual_usage"],
                 tp_monthly_volume=cohort["tp_monthly_volume"],
                 include_float=cohort["include_float"],
+                include_float_std=cohort["include_float_std"],
                 include_teampay=cohort["include_teampay"],
+                include_upside=cohort["include_upside"],
+                include_upside_std=cohort["include_upside_std"],
+                upside_total_customers=cohort["upside_total_customers"],
             )
 
         st.session_state["standard"] = standard
@@ -192,6 +197,8 @@ def main():
                         tp_monthly_volume=ci.get("tp_monthly_volume", cfg.TEAMPAY_MONTHLY_VOLUME),
                         include_float=ci.get("include_float", True),
                         include_teampay=ci.get("include_teampay", True),
+                        include_upside=ci.get("include_upside", False),
+                        upside_total_customers=ci.get("upside_total_customers", cfg.UPSIDE_TOTAL_CUSTOMERS),
                     )
                     st.session_state["ai_scenario"] = ai_scen
                     st.session_state["ai_reasoning"] = ai_reasoning
@@ -271,6 +278,9 @@ def main():
     st.divider()
     render_annualized_impact(standard, revenue_opt, margin_opt, ai=ai_scenario)
 
+    if standard.upside_detail:
+        st.divider()
+        render_upside_breakdown(standard, revenue_opt, margin_opt, ai=ai_scenario)
 
 
 if __name__ == "__main__":
