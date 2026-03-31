@@ -1030,11 +1030,19 @@ def render_per_deal_comparison(
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
+_VAS_PALETTE = [
+    "#E67E22", "#F39C12", "#D35400", "#E74C3C", "#C0392B", "#8E44AD",
+    "#2980B9", "#1ABC9C", "#27AE60", "#16A085", "#2C3E50", "#7F8C8D",
+    "#9B59B6", "#3498DB", "#E91E63", "#FF5722", "#795548", "#607D8B",
+    "#00BCD4", "#FFC107", "#4CAF50", "#673AB7", "#009688",
+]
+
+
 def render_upside_breakdown(
     std: CohortScenario, ltv: CohortScenario, top: CohortScenario,
     ai: CohortScenario | None = None,
 ) -> None:
-    """Stacked bar chart showing upside revenue by line item per scenario."""
+    """Stacked bar chart showing VAS fee revenue by line item per scenario."""
     import plotly.graph_objects as go
 
     has_upside = std.upside_detail is not None and any(std.upside_detail.values())
@@ -1042,15 +1050,6 @@ def render_upside_breakdown(
         return
 
     st.markdown("**Value-Added Services Fees** *(3-year total per cohort, by line item)*")
-
-    items = [
-        ("Standard Payout Fee", "#E67E22"),
-        ("Per-User / Seat Fee", "#F39C12"),
-        ("Dispute Threshold Fee", "#D35400"),
-        ("Payment Failures", "#E74C3C"),
-        ("Account Updater Fee", "#C0392B"),
-        ("Min Volume Penalties", "#8E44AD"),
-    ]
 
     scenarios = [
         ("Standard", std, _STD_CLR),
@@ -1060,10 +1059,19 @@ def render_upside_breakdown(
     if ai is not None:
         scenarios.append(("AI Recommended", ai, _AI_CLR))
 
+    all_items: list[str] = []
+    for _, s, _ in scenarios:
+        if s.upside_detail:
+            for y in [1, 2, 3]:
+                for name in s.upside_detail.get(y, {}):
+                    if name not in all_items:
+                        all_items.append(name)
+
     x_labels = [s[0] for s in scenarios]
 
     fig = go.Figure()
-    for item_name, item_color in items:
+    for idx, item_name in enumerate(all_items):
+        color = _VAS_PALETTE[idx % len(_VAS_PALETTE)]
         vals = []
         for _, s, _ in scenarios:
             total = sum(
@@ -1074,7 +1082,7 @@ def render_upside_breakdown(
         texts = [f"${v:,.0f}" if v > 20_000 else "" for v in vals]
         fig.add_trace(go.Bar(
             x=x_labels, y=vals,
-            name=item_name, marker_color=item_color,
+            name=item_name, marker_color=color,
             text=texts, textposition="inside",
             textfont=dict(color="white", size=11),
         ))
@@ -1103,7 +1111,7 @@ def render_upside_breakdown(
             ],
         ),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=12)),
-        margin=dict(t=50, b=40), height=450,
+        margin=dict(t=50, b=40), height=500,
         plot_bgcolor="white",
     )
     fig.update_yaxes(gridcolor="rgba(0,0,0,0.06)")

@@ -119,6 +119,7 @@ def main():
                 include_upside=cohort["include_upside"],
                 include_upside_std=cohort["include_upside_std"],
                 upside_total_customers=cohort["upside_total_customers"],
+                vas_recommended_only=cohort["vas_recommended_only"],
             )
 
         st.session_state["standard"] = standard
@@ -199,6 +200,7 @@ def main():
                         include_teampay=ci.get("include_teampay", True),
                         include_upside=ci.get("include_upside", False),
                         upside_total_customers=ci.get("upside_total_customers", cfg.UPSIDE_TOTAL_CUSTOMERS),
+                        vas_recommended_only=ci.get("vas_recommended_only", False),
                     )
                     st.session_state["ai_scenario"] = ai_scen
                     st.session_state["ai_reasoning"] = ai_reasoning

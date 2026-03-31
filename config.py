@@ -154,30 +154,42 @@ TEAMPAY_PROCESSING_MARGIN = 0.27   # 27% margin on processing
 TEAMPAY_MONTHLY_VOLUME = 100_000   # $100k/month per Teampay deal (Y1 at 50% ramp)
 TEAMPAY_PROCESSING_GROWTH = 0.03   # 3% annual growth on processing volume
 
-# ── Upside Revenue Streams ──────────────────────────────────
-# Derived from portfolio-level TAM estimates, converted to per-deal
-# using total active customers as denominator.
+# ── Value-Added Services (VAS) Fee Revenue ───────────────────
+# Data-driven list of all fee items with TAM > $0.
+# Each item: name, tam_mrr (portfolio), recommended flag, build_cost,
+# and model type ("volume_payout", "volume_failures", "volume_updater", or "flat").
 UPSIDE_TOTAL_CUSTOMERS = 750
 
-# 1. Standard Payout Fee: 10bps on all payment volume
+# Volume-model constants (used by items with model != "flat")
 UPSIDE_PAYOUT_BPS = 0.001
-
-# 2. Per-User / Seat Fee: $50/user/month
-UPSIDE_TOTAL_USERS = 2_000
-UPSIDE_SEAT_FEE_MONTHLY = 50
-
-# 3. Dispute Threshold Fee: $500/month for customers exceeding 2% dispute rate
-UPSIDE_DISPUTE_CUSTOMERS = 70
-UPSIDE_DISPUTE_FEE_MONTHLY = 500
-
-# 4. Payment Failures: $0.50 per failed payment
 UPSIDE_AVG_CARD_TXN_SIZE = 1_150
 UPSIDE_PAYMENT_FAILURE_RATE = 0.108
 UPSIDE_PAYMENT_FAILURE_FEE = 0.50
-
-# 5. Account Updater: $0.20 per card txn, 50% opt-in
 UPSIDE_ACCOUNT_UPDATER_OPTIN = 0.50
 UPSIDE_ACCOUNT_UPDATER_FEE = 0.20
 
-# 6. Minimum Volume Penalties: $10K MRR across portfolio
-UPSIDE_MIN_VOLUME_PENALTY_MRR = 10_000
+VAS_ITEMS = [
+    {"name": "Standard Payout Fee",       "tam_mrr": 400_000, "recommended": True,  "build_cost": 0,      "model": "volume_payout"},
+    {"name": "Instant Payout Fee",        "tam_mrr": 400_000, "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Invoicing Fee",             "tam_mrr": 250_000, "recommended": False, "build_cost": 10_000, "model": "flat"},
+    {"name": "Account Maintenance",       "tam_mrr": 200_000, "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Per-User / Seat Fee",       "tam_mrr": 100_000, "recommended": True,  "build_cost": 0,      "model": "flat"},
+    {"name": "Tax Automation Fee",        "tam_mrr": 63_000,  "recommended": False, "build_cost": 10_000, "model": "flat"},
+    {"name": "Buy Now Pay Later",         "tam_mrr": 60_000,  "recommended": False, "build_cost": 10_000, "model": "flat"},
+    {"name": "Dispute Threshold Fee",     "tam_mrr": 35_000,  "recommended": True,  "build_cost": 0,      "model": "flat"},
+    {"name": "PCI Compliance Fee",        "tam_mrr": 21_000,  "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Premium Support",           "tam_mrr": 20_000,  "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Recurring Billing Fee",     "tam_mrr": 17_000,  "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Payment Failures",          "tam_mrr": 15_000,  "recommended": True,  "build_cost": 0,      "model": "volume_failures"},
+    {"name": "Account Updater Fee",       "tam_mrr": 13_500,  "recommended": True,  "build_cost": 0,      "model": "volume_updater"},
+    {"name": "Min Volume Penalties",      "tam_mrr": 10_000,  "recommended": True,  "build_cost": 0,      "model": "flat"},
+    {"name": "Network Token Fee",         "tam_mrr": 5_000,   "recommended": False, "build_cost": 10_000, "model": "flat"},
+    {"name": "Batch Processing Fee",      "tam_mrr": 3_850,   "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "AI Dispute Resolution",     "tam_mrr": 3_600,   "recommended": False, "build_cost": 10_000, "model": "flat"},
+    {"name": "Fraud Screening Fee",       "tam_mrr": 2_600,   "recommended": False, "build_cost": 10_000, "model": "flat"},
+    {"name": "Fee on Refunds",            "tam_mrr": 1_000,   "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Reporting / Query Cost",    "tam_mrr": 1_000,   "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Exit Fee",                  "tam_mrr": 250,     "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "KYC/KYB Verification",      "tam_mrr": 100,     "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Dispute Retrieval Fee",     "tam_mrr": 100,     "recommended": False, "build_cost": 0,      "model": "flat"},
+]

@@ -67,8 +67,7 @@ def render_cohort_inputs() -> dict:
             disabled=not include_float)
     with ms2:
         include_upside = st.toggle("Include VAS Fees", value=True,
-            help="Add value-added service fees (payout fee, seat fee, "
-                 "dispute threshold, payment failures, account updater, min volume penalties).")
+            help="Add value-added service fees across all scenarios.")
         include_upside_std = st.toggle("VAS Fees in Standard", value=True,
             help="Include VAS fees in the Standard scenario.",
             disabled=not include_upside)
@@ -78,8 +77,11 @@ def render_cohort_inputs() -> dict:
         include_upside_std = False
 
     if include_upside:
-        ms3, _, _ = st.columns([2, 1, 2])
-        with ms3:
+        vs1, vs2 = st.columns(2)
+        with vs1:
+            vas_recommended_only = st.toggle("Recommended Only", value=False,
+                help="Show only the 6 recommended VAS fee items instead of all 23.")
+        with vs2:
             upside_total_customers = st.number_input(
                 "Total Active Customers",
                 min_value=100, value=750, step=50,
@@ -87,6 +89,7 @@ def render_cohort_inputs() -> dict:
             )
     else:
         upside_total_customers = 750
+        vas_recommended_only = False
 
     st.subheader("Teampay Assumptions")
     include_teampay = st.toggle("Include Teampay", value=True,
@@ -138,6 +141,7 @@ def render_cohort_inputs() -> dict:
         "include_upside": include_upside,
         "include_upside_std": include_upside_std,
         "upside_total_customers": upside_total_customers,
+        "vas_recommended_only": vas_recommended_only,
     }
 
 

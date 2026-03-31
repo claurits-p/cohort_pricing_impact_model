@@ -1,16 +1,16 @@
 """
-Upside revenue streams — new fee-based revenue opportunities.
+Value-Added Services (VAS) fee revenue model.
 
-Converts portfolio-level TAM estimates to per-deal annual revenue using
-total active customers as denominator.  Volume-based items (payout,
-payment failures, account updater) scale with the per-deal volume
-forecast; per-customer items (seat fee, dispute threshold) are flat
-annual amounts per surviving deal.
+Data-driven: iterates over cfg.VAS_ITEMS to compute per-deal annual
+revenue for each fee stream.  Three items use volume-based models
+(payout, payment failures, account updater); all others use a flat
+per-customer rate derived from TAM_ARR / total_customers.
 
-All streams are modeled as 100% margin (no incremental COGS).
+Build costs ($10K one-time for some items) are returned separately
+so the engine can apply them to Y1 only.
 """
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import config as cfg
 from models.volume_forecast import VolumeForecastYear
@@ -19,54 +19,53 @@ from models.volume_forecast import VolumeForecastYear
 @dataclass
 class UpsideYear:
     year: int
-    payout_fee: float
-    seat_fee: float
-    dispute_threshold_fee: float
-    payment_failure_fee: float
-    account_updater_fee: float
-    min_volume_penalty: float
-    total: float
+    items: dict[str, float] = field(default_factory=dict)
+    total: float = 0.0
+    build_cost: float = 0.0
 
 
 def compute_upside_per_deal(
     vol: VolumeForecastYear,
     total_customers: int = cfg.UPSIDE_TOTAL_CUSTOMERS,
+    recommended_only: bool = False,
 ) -> UpsideYear:
-    """Compute upside revenue for a single deal for one year.
+    """Compute VAS fee revenue for a single deal for one year.
 
-    Volume-based items use the deal's forecasted volume for that year.
-    Per-customer items are constant annual amounts derived from
-    portfolio totals / total_customers.
+    Returns per-deal amounts (not yet scaled by deal count / retention).
+    Build cost is the total one-time cost for all included items that
+    require product investment, divided across total_customers.
     """
-    users_per_customer = cfg.UPSIDE_TOTAL_USERS / total_customers
-    dispute_pct = cfg.UPSIDE_DISPUTE_CUSTOMERS / total_customers
+    items: dict[str, float] = {}
+    build_cost_total = 0.0
 
-    payout = vol.total * cfg.UPSIDE_PAYOUT_BPS
+    for item in cfg.VAS_ITEMS:
+        if recommended_only and not item["recommended"]:
+            continue
 
-    seat = users_per_customer * cfg.UPSIDE_SEAT_FEE_MONTHLY * 12
+        name = item["name"]
+        model = item["model"]
+        tam_arr = item["tam_mrr"] * 12
 
-    dispute = dispute_pct * cfg.UPSIDE_DISPUTE_FEE_MONTHLY * 12
+        if model == "volume_payout":
+            rev = vol.total * cfg.UPSIDE_PAYOUT_BPS
+        elif model == "volume_failures":
+            card_txns = vol.cc / cfg.UPSIDE_AVG_CARD_TXN_SIZE if cfg.UPSIDE_AVG_CARD_TXN_SIZE > 0 else 0
+            ach_txns = vol.ach / cfg.ACH_AVG_TXN_SIZE if cfg.ACH_AVG_TXN_SIZE > 0 else 0
+            bank_txns = vol.bank_network / cfg.ACH_AVG_TXN_SIZE if cfg.ACH_AVG_TXN_SIZE > 0 else 0
+            total_txns = card_txns + ach_txns + bank_txns
+            rev = total_txns * cfg.UPSIDE_PAYMENT_FAILURE_RATE * cfg.UPSIDE_PAYMENT_FAILURE_FEE
+        elif model == "volume_updater":
+            card_txns = vol.cc / cfg.UPSIDE_AVG_CARD_TXN_SIZE if cfg.UPSIDE_AVG_CARD_TXN_SIZE > 0 else 0
+            rev = card_txns * cfg.UPSIDE_ACCOUNT_UPDATER_OPTIN * cfg.UPSIDE_ACCOUNT_UPDATER_FEE
+        else:
+            rev = tam_arr / total_customers
 
-    card_txns = vol.cc / cfg.UPSIDE_AVG_CARD_TXN_SIZE if cfg.UPSIDE_AVG_CARD_TXN_SIZE > 0 else 0
-    ach_txns = vol.ach / cfg.ACH_AVG_TXN_SIZE if cfg.ACH_AVG_TXN_SIZE > 0 else 0
-    bank_txns = vol.bank_network / cfg.ACH_AVG_TXN_SIZE if cfg.ACH_AVG_TXN_SIZE > 0 else 0
-    total_txns = card_txns + ach_txns + bank_txns
-
-    failures = total_txns * cfg.UPSIDE_PAYMENT_FAILURE_RATE * cfg.UPSIDE_PAYMENT_FAILURE_FEE
-
-    updater = card_txns * cfg.UPSIDE_ACCOUNT_UPDATER_OPTIN * cfg.UPSIDE_ACCOUNT_UPDATER_FEE
-
-    min_vol = cfg.UPSIDE_MIN_VOLUME_PENALTY_MRR * 12 / total_customers
-
-    total = payout + seat + dispute + failures + updater + min_vol
+        items[name] = rev
+        build_cost_total += item["build_cost"]
 
     return UpsideYear(
         year=vol.year,
-        payout_fee=payout,
-        seat_fee=seat,
-        dispute_threshold_fee=dispute,
-        payment_failure_fee=failures,
-        account_updater_fee=updater,
-        min_volume_penalty=min_vol,
-        total=total,
+        items=items,
+        total=sum(items.values()),
+        build_cost=build_cost_total,
     )
