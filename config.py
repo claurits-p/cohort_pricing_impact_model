@@ -134,7 +134,7 @@ FUNNEL_Q4_RATES = [
     {"from": "SAL",    "to": "ROI",          "rate": 0.3981},
     {"from": "ROI",    "to": "Negotiation",  "rate": 0.6977},
 ]
-FUNNEL_Q4_ROI_TO_WIN = 0.59   # Q4 2025 ROI→Win rate (baseline for model)
+FUNNEL_Q4_ROI_TO_WIN = 0.58   # Q4 2025 ROI→Win rate (baseline for model)
 
 # Grand total historical rates (Jan 2023 – Jan 2026, for Historical column)
 # Derived: SQL→SQL-H = 8.21/11.31 = 72.6%, SQL-H→SAL = 11.31/23.2 = 48.8%
