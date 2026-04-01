@@ -123,7 +123,7 @@ FLAT_MONTHLY_ANNUAL_CHURN = 0.05      # 5% (same as no-increase anchor)
 GROWTH_BASELINE_QUARTERLY = 0.02        # 2% quarterly growth offsets churn (UI adjustable)
 
 # ── Sales Funnel ─────────────────────────────────────────────
-FUNNEL_SQLS_PER_QUARTER = 900
+FUNNEL_SQLS_PER_QUARTER = 921
 
 # Q4 2025 actual rates (for Standard scenario — hardcoded from data)
 # Derived from cumulative: SQL→SQL-H = SQL→Win/SQL-H→Win, SQL-H→SAL = SQL-H→Win/SAL→Win
