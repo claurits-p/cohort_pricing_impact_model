@@ -18,19 +18,20 @@ SYSTEM_PROMPT = """You are a senior pricing strategy analyst embedded inside Pay
 
 ABOUT PAYSTAND:
 - Paystand sells a B2B payment processing platform to mid-market and enterprise companies.
-- Revenue streams: SaaS subscriptions (annual), credit card processing fees, ACH processing fees, float income from holding funds, implementation fees, and Teampay (card processing add-on).
+- Revenue streams: SaaS subscriptions (annual), credit card processing fees, ACH processing fees, float income from holding funds, implementation fees, Teampay (card processing add-on), and Value-Added Services (VAS) fees.
 - Competitive market against legacy processors (Bill.com, Stripe, etc.) — pricing is the primary lever to win deals.
 - Average deal: ~$30k ARR pre-discount, ~$5.5k implementation fee.
 - Current standard pricing: 30% SaaS discount, 2.20% CC base rate, 0.10% ACH rate on 100% accelerated ACH.
 - Sales team prices deals individually — no fixed rate card.
 
 KEY BUSINESS DYNAMICS:
-1. LOGOS MATTER: Company is in growth mode. Each customer processes increasing volume over time — a deal won today compounds in value. Winning 10 more deals at slightly lower margins is usually better than winning 5 at higher margins.
+1. LOGOS MATTER: Company is in growth mode. Each customer processes increasing volume over time — a deal won today compounds in value. Each deal also generates ~$25K/yr in Value-Added Services (VAS) fees. Winning 10 more deals at slightly lower margins is usually better than winning 5 at higher margins.
 2. SAAS DISCOUNT & REMOVAL: The optimizer now chooses both discount level AND removal rate (0-50%). Only 75% of planned removals succeed (attainment). Y2 price capped at 2× Y1. Churn scales linearly with Y2 price increase: 5% annual at 0% increase, 10% at 25% increase, capped at 35%.
 3. ACH IS UNDERPRICED TODAY: Standard gives away ACH at 0.10% (essentially free). There's room to charge more via fixed fees or higher BPS without significantly hurting win rate.
 4. FLAT MONTHLY SAAS: Alternative to discount-and-remove. Charge $600-$1000/month flat, no removal, no sticker shock. Lower per-deal SaaS but dramatically better retention.
 5. TEAMPAY BUNDLING: Optimized scenarios assume higher Teampay adoption (80% contract opt-in, 45% usage) vs standard (10%). This is a real and achievable revenue upside.
-6. RETENTION > EXTRACTION: A customer staying 5 years at $15k/yr SaaS is worth more than one paying $25k Y1 who churns at Y2.
+6. VAS FEES: 25 value-added service fee items (transfer fees, payout fees, seat fees, dispute fees, etc.) generate ~$25K per deal per year. These are a pure function of deal count — more deals won = proportionally more VAS revenue. This makes deal count even more valuable than SaaS revenue alone suggests.
+7. RETENTION > EXTRACTION: A customer staying 5 years at $15k/yr SaaS is worth more than one paying $25k Y1 who churns at Y2.
 
 OUTPUT FORMAT — you MUST follow this exact structure:
 
@@ -113,6 +114,18 @@ def _build_context(standard, revenue_opt, margin_opt) -> str:
     rev_pct = rev_delta / standard.three_year_revenue if standard.three_year_revenue > 0 else 0
     mar_pct = mar_delta / standard.three_year_margin if standard.three_year_margin > 0 else 0
 
+    vas_section = ""
+    if hasattr(standard, 'upside_detail') and any(
+        s.upside_detail for s in [standard, revenue_opt, margin_opt] if hasattr(s, 'upside_detail')
+    ):
+        vas_lines = []
+        for label, s in [("Standard", standard), ("Revenue Optimized", revenue_opt), ("$ Margin Optimized", margin_opt)]:
+            if hasattr(s, 'upside_detail') and s.upside_detail:
+                total_vas = sum(v for v in s.upside_detail.values())
+                vas_lines.append(f"  {label}: ${total_vas:,.0f}/yr VAS fees ({s.deals_won} deals)")
+        if vas_lines:
+            vas_section = "\n- VAS Fees per year:\n" + "\n".join(vas_lines)
+
     context = f"""Here are the model outputs for this cohort. Analyze them using the exact output format specified.
 
 STANDARD (what we do today):
@@ -133,7 +146,7 @@ KEY COMPARISONS:
 - Revenue gap: Revenue Optimized adds ${rev_delta:+,.0f} over 3 years vs Standard
 - Margin gap: $ Margin Optimized adds ${mar_delta:+,.0f} over 3 years vs Standard
 - Per-deal Y1 SaaS: Standard ${standard.per_deal_yearly[1].saas_revenue:,.0f} vs Revenue Optimized ${revenue_opt.per_deal_yearly[1].saas_revenue:,.0f} vs $ Margin Optimized ${margin_opt.per_deal_yearly[1].saas_revenue:,.0f}
-- Per-deal Y2 SaaS: Standard ${standard.per_deal_yearly[2].saas_revenue:,.0f} vs Revenue Optimized ${revenue_opt.per_deal_yearly[2].saas_revenue:,.0f} vs $ Margin Optimized ${margin_opt.per_deal_yearly[2].saas_revenue:,.0f}
+- Per-deal Y2 SaaS: Standard ${standard.per_deal_yearly[2].saas_revenue:,.0f} vs Revenue Optimized ${revenue_opt.per_deal_yearly[2].saas_revenue:,.0f} vs $ Margin Optimized ${margin_opt.per_deal_yearly[2].saas_revenue:,.0f}{vas_section}
 
 Remember: provide INSIGHT, not summary. Follow the exact output format."""
 
@@ -168,17 +181,21 @@ def run_ai_analysis(
 
 _AI_SCENARIO_PROMPT = f"""You are a senior pricing strategist with complete knowledge of a B2B payments pricing model.
 
-You will see the results of two mathematical optimizers — one that purely maximizes revenue, one that purely maximizes margin dollars. Neither optimizer thinks holistically. Your job is to find a pricing configuration that offers a UNIQUE tradeoff neither optimizer achieves alone.
+You will see the results of two mathematical optimizers — one that purely maximizes revenue, one that purely maximizes margin dollars. Your job is to find the BEST OVERALL pricing that maximizes risk-adjusted 3-year value.
 
-YOUR SPECIFIC TARGET: Find pricing that is COMPETITIVE with both optimizers — you must beat Revenue Optimized on at least ONE metric (margin $, margin %, or take rate) AND beat $ Margin Optimized on at least ONE metric (revenue, deals, or take rate). You don't have to be the best at everything — you need to offer a UNIQUE tradeoff that neither optimizer achieves alone.
+YOUR GOAL: Maximize total 3-year value (revenue and margin) while managing retention risk. The math optimizers prove that winning MORE DEALS is the single most powerful lever — the Revenue Optimizer wins ~120 deals vs Standard's ~75, generating massive additional revenue. You should be AGGRESSIVE on deal count. Don't settle for Standard-level deal counts.
 
-Think like a deal desk strategist: aggressive enough to win lots of deals, but smart about where margin comes from (ACH pricing, impl fees, SaaS strategy, churn management).
+CRITICAL INSIGHT — DEAL COUNT IS KING:
+- Each additional deal won generates ~$25,000/year in Value-Added Services (VAS) fee revenue ON TOP of SaaS and processing revenue. This is pure margin.
+- VAS fees include: transfer fees, payout fees, seat fees, dispute fees, payment failure fees, etc. (25 items totaling ~$19M ARR across 750 customers).
+- The Revenue Optimizer proves ~120 deals is achievable. Your target should be 90-120+ deals.
+- A deal won at lower SaaS but with processing + VAS revenue is worth MORE than a deal lost at higher SaaS.
 
-HARD RULE: Your submission will be REJECTED if you fail to beat EACH optimizer on at least one metric. You must find the efficient frontier between them.
+Think like a deal desk strategist: aggressive enough to win lots of deals, smart about extracting margin from ACH/CC pricing and controlling churn.
 
 COMPLETE MODEL MECHANICS:
 
-1. WIN RATE (59% baseline at standard pricing, determines how many deals you win):
+1. WIN RATE ({cfg.FUNNEL_Q4_ROI_TO_WIN:.0%} baseline at standard pricing, determines how many deals you win):
    - SaaS Y1 price is the DOMINANT lever. It follows a convex curve (power=1.3):
      * Best case: $7,200/yr (flat $600/mo) → +25pp above baseline
      * Worst case: $30,476/yr (0% discount) → -28pp below baseline
@@ -188,7 +205,7 @@ COMPLETE MODEL MECHANICS:
    - Impl fee: full waiver → +3pp; no discount → -6pp
    - Total range: ~10% to ~90% win rate
 
-2. DEAL COUNT: Win rate feeds through a sales funnel (900 SQLs → conversion stages → deals won). Higher win rate = more deals, and the effect compounds through upstream funnel stages.
+2. DEAL COUNT: Win rate feeds through a sales funnel ({cfg.FUNNEL_SQLS_PER_QUARTER} SQLs → conversion stages → deals won). Higher win rate = more deals, and the effect compounds through upstream funnel stages. The relationship is non-linear — small win rate improvements yield large deal count gains.
 
 3. REVENUE PER DEAL:
    - SaaS: Y1 = list price × (1-discount). Y2/Y3 = partial discount removal + 7% escalator, capped at 2× Y1.
@@ -196,12 +213,13 @@ COMPLETE MODEL MECHANICS:
    - ACH: accel volume × BPS + non-accel txns × fixed fee (same rates all 3 years)
    - Impl fee: Y1 only
    - Float income: from holding funds during settlement (driven by hold days)
+   - VAS Fees: ~$25,000/deal/year in value-added service fees (not affected by your pricing — purely a function of deal count)
 
 4. CHURN (critical for Y2/Y3 value):
    - 0% Y2 price increase → 5% annual churn
    - Each 1% price increase adds 0.20pp annual churn
    - 25% increase → 10% annual churn; capped at 35%
-   - Flat monthly SaaS = 0% increase = lowest churn
+   - Flat monthly SaaS = 0% increase = lowest churn (5%)
    - 2% quarterly growth partially offsets churn
    - A 50% discount with 25% removal causes ~20% price increase → ~9% annual churn
    - A 50% discount with 50% removal causes ~40% price increase → ~13% annual churn
@@ -213,10 +231,11 @@ COMPLETE MODEL MECHANICS:
    - This is the core tension: aggressive removal recovers SaaS but kills retention
 
 6. KEY DYNAMICS:
+   - DEAL COUNT IS THE #1 LEVER: Each deal generates processing + VAS revenue that dwarfs the SaaS discount cost. Win more deals.
    - Logos compound: each deal processes increasing volume over time. More deals at lower margins can beat fewer deals at higher margins.
    - CC rates revert to standard at Y2 — so discounting CC Y1 has limited cost (only 1 year of lower rev)
    - ACH is currently given away at 0.10% — there is margin to capture here
-   - SaaS discount is the biggest win rate lever but creates the biggest retention risk
+   - Flat monthly SaaS ($600-$800/mo) gives very high win rates WITH lowest churn — consider this seriously
 
 LEVER BOUNDS (you MUST stay within these):
 
@@ -290,7 +309,21 @@ def _build_scenario_context(standard, revenue_opt, margin_opt) -> str:
     rev_delta = revenue_opt.three_year_revenue - standard.three_year_revenue
     mar_delta = margin_opt.three_year_margin - standard.three_year_margin
 
-    return f"""Here are the results of three scenarios. Study them carefully — understand what each optimizer prioritized, what it sacrificed, and what the tradeoffs are. Then propose what YOU think is the best overall pricing.
+    vas_note = ""
+    if hasattr(standard, 'upside_detail') and standard.upside_detail:
+        std_vas = sum(v for v in standard.upside_detail.values()) if standard.upside_detail else 0
+        rev_vas = sum(v for v in revenue_opt.upside_detail.values()) if revenue_opt.upside_detail else 0
+        mar_vas = sum(v for v in margin_opt.upside_detail.values()) if margin_opt.upside_detail else 0
+        vas_note = (
+            f"\n\nVAS FEE IMPACT (included in above revenue numbers):\n"
+            f"  Standard ({standard.deals_won} deals): ${std_vas:,.0f}/yr in VAS fees\n"
+            f"  Revenue Opt ({revenue_opt.deals_won} deals): ${rev_vas:,.0f}/yr in VAS fees\n"
+            f"  $ Margin Opt ({margin_opt.deals_won} deals): ${mar_vas:,.0f}/yr in VAS fees\n"
+            f"  Each additional deal = ~${rev_vas / revenue_opt.deals_won if revenue_opt.deals_won else 0:,.0f}/yr in VAS fees\n"
+            f"  This means winning MORE DEALS has a massive compounding effect on total revenue."
+        )
+
+    return f"""Here are the results of three scenarios. Study them carefully — the Revenue Optimizer wins {revenue_opt.deals_won} deals and the $ Margin Optimizer wins {margin_opt.deals_won}. Notice how many more deals they win vs Standard's {standard.deals_won}. DEAL COUNT drives total value.
 
 STANDARD (current pricing — your baseline):
 {_full_summary(standard)}
@@ -300,8 +333,9 @@ REVENUE OPTIMIZED (pure revenue maximization — {revenue_opt.deals_won - standa
 
 $ MARGIN OPTIMIZED (pure margin $ maximization — {margin_opt.deals_won - standard.deals_won:+d} deals, ${mar_delta:+,.0f} margin vs Standard):
 {_full_summary(margin_opt)}
+{vas_note}
 
-You have complete knowledge of the model mechanics (provided in your system prompt). Use that knowledge to reason about what pricing produces the best risk-adjusted 3-year outcome. Propose your scenario as JSON."""
+Your target: maximize 3-year revenue + margin by winning as many deals as possible while maintaining healthy margins. The Revenue Optimizer's deal count ({revenue_opt.deals_won}) is achievable — aim for it. Propose your scenario as JSON."""
 
 
 def _clamp(value: float, lo: float, hi: float) -> float:
@@ -484,8 +518,6 @@ def _evaluate_pricing_fn(args: dict, standard, revenue_opt, margin_opt, volumes,
 
     lines.append("")
     lines.append("COMPARISON TO EXISTING SCENARIOS:")
-    rev_opt_mpct = revenue_opt.three_year_margin / revenue_opt.three_year_revenue if revenue_opt.three_year_revenue > 0 else 0
-    lines.append(f"  [TARGET: beat Rev Opt margin % of {rev_opt_mpct:.1%} while staying within ~$1-2M of its ${revenue_opt.three_year_revenue:,.0f} revenue]")
     for label, scen in [("Standard", standard), ("Revenue Opt", revenue_opt), ("$ Margin Opt", margin_opt)]:
         d_rev = rev_3yr - scen.three_year_revenue
         d_mar = margin_3yr - scen.three_year_margin
@@ -506,9 +538,9 @@ def _evaluate_pricing_fn(args: dict, standard, revenue_opt, margin_opt, volumes,
 
     lines.append("")
     lines.append(
-        "YOUR GOAL: Beat Revenue Opt on at least 1 metric (margin $, margin %, or take rate) "
-        "AND beat $ Margin Opt on at least 1 metric (revenue, deals, or take rate). "
-        "Find the unique tradeoff between them."
+        f"YOUR GOAL: Maximize 3-year revenue + margin. Target {revenue_opt.deals_won}+ deals. "
+        f"Each deal also generates ~$25K/yr in VAS fees (not shown here). "
+        "More deals = dramatically more total value. Prioritize win rate."
     )
 
     return "\n".join(lines)
@@ -516,7 +548,7 @@ def _evaluate_pricing_fn(args: dict, standard, revenue_opt, margin_opt, volumes,
 
 _MIN_TESTS = 5
 _MAX_ITERATIONS = 12
-_MODEL = "gpt-4o-mini"
+_MODEL = "gpt-4o"
 
 
 def _call_openai_with_retry(client, **kwargs) -> object:
@@ -538,7 +570,7 @@ def run_ai_scenario(
     margin_opt,
     api_key: str,
 ) -> tuple[dict, str]:
-    """GPT-4o-mini iteratively tests pricing via function calling, then submits its best.
+    """GPT-4o iteratively tests pricing via function calling, then submits its best.
 
     Returns (lever_dict, reasoning_string).
     Falls back to best tested config if AI doesn't formally submit.
@@ -555,16 +587,16 @@ def run_ai_scenario(
             "You have an `evaluate_pricing` tool — use it to test different pricing configurations "
             "and see the real model results. Each result includes a direct comparison to all three "
             "existing scenarios so you can see exactly where you stand.\n\n"
-            "GOAL: Find a unique tradeoff — beat Revenue Optimized on at least ONE metric "
-            "AND beat $ Margin Optimized on at least ONE metric. "
-            "If you can't beat both, prioritize beating at least one.\n\n"
+            "GOAL: Maximize 3-year revenue + margin. The #1 lever is DEAL COUNT — each deal generates "
+            "~$25K/yr in VAS fees on top of SaaS and processing revenue. Target 90-120+ deals.\n\n"
             f"You MUST test at least {_MIN_TESTS} configurations before submitting. "
             "MANDATORY: Test BOTH saas strategies at least once.\n\n"
             "STRATEGY TIPS:\n"
-            "- flat_monthly at $600/mo gives same win rate as ~76% discount but only 5% churn vs ~13%\n"
+            "- flat_monthly at $600/mo gives same win rate as ~76% discount but only 5% churn vs ~13% — this is often the BEST strategy\n"
             "- Higher ACH rates/fees boost margin % and take rate with modest win rate impact\n"
             "- CC rates revert to standard at Y2, so Y1 CC discounts have limited cost\n"
-            "- Lower discount removal = less churn = more Y2/Y3 revenue from retained deals\n\n"
+            "- Lower discount removal = less churn = more Y2/Y3 revenue from retained deals\n"
+            "- Aggressive SaaS discounting (60%+) wins many more deals — the VAS and processing revenue from extra deals more than compensates\n\n"
             "Test at least 5 configs then submit your best. Don't overthink — submit when you "
             "have a config you're confident in."
         )},
@@ -575,7 +607,7 @@ def run_ai_scenario(
     fb = cfg.SAAS_FLAT_MONTHLY_BOUNDS
 
     best_tested = None
-    best_tested_rev = 0
+    best_tested_score = 0
 
     def _count_tests():
         return sum(
@@ -636,10 +668,13 @@ def run_ai_scenario(
             ),
         }
 
-    def _parse_revenue(result_str):
+    def _parse_score(result_str):
         import re as _re
-        m = _re.search(r"3-Year Revenue: \$([\d,]+)", result_str)
-        return float(m.group(1).replace(",", "")) if m else 0
+        rev_m = _re.search(r"3-Year Revenue: \$([\d,]+)", result_str)
+        mar_m = _re.search(r"3-Year Margin: \$([\d,]+)", result_str)
+        rev = float(rev_m.group(1).replace(",", "")) if rev_m else 0
+        mar = float(mar_m.group(1).replace(",", "")) if mar_m else 0
+        return rev + mar
 
     rejections = 0
     _MAX_REJECTIONS = 2
@@ -699,39 +734,21 @@ def run_ai_scenario(
                 ai_mpct = float(_mar_m.group(2)) / 100 if _mar_m else 0
                 ai_tr = float(_tr_m.group(1)) / 100 if _tr_m else 0
 
-                dominated_by = []
-                for lbl, scen in [("Revenue Opt", revenue_opt), ("$ Margin Opt", margin_opt)]:
-                    s_rev = scen.three_year_revenue
-                    s_mar = scen.three_year_margin
-                    s_mpct = scen.three_year_margin_pct
-                    s_tr = scen.three_year_take_rate
-                    beats_any = (
-                        ai_rev > s_rev or ai_mar > s_mar
-                        or ai_mpct > s_mpct or ai_tr > s_tr
-                    )
-                    if not beats_any:
-                        dominated_by.append(lbl)
+                _deals_m = re.search(r"(\d+) deals won", submit_result)
+                ai_deals = int(_deals_m.group(1)) if _deals_m else 0
 
-                if dominated_by and rejections < _MAX_REJECTIONS:
+                too_few_deals = ai_deals < standard.deals_won
+                if too_few_deals and rejections < _MAX_REJECTIONS:
                     rejections += 1
-                    hints = []
-                    for lbl in dominated_by:
-                        scen = revenue_opt if "Rev" in lbl else margin_opt
-                        hints.append(
-                            f"{lbl}: rev=${scen.three_year_revenue:,.0f}, "
-                            f"margin=${scen.three_year_margin:,.0f} ({scen.three_year_margin_pct:.1%}), "
-                            f"take={scen.three_year_take_rate:.2%}"
-                        )
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
                         "content": (
                             f"REJECTED ({rejections}/{_MAX_REJECTIONS} max): "
-                            f"You failed to beat: {', '.join(dominated_by)}.\n"
-                            f"Your result: ${ai_rev:,.0f} rev, ${ai_mar:,.0f} margin, "
-                            f"{ai_mpct:.1%} margin %, {ai_tr:.2%} take rate.\n"
-                            f"Targets:\n" + "\n".join(f"  {h}" for h in hints)
-                            + "\n\nTry higher ACH rates or a different SaaS strategy. "
+                            f"Only {ai_deals} deals — that's fewer than Standard's {standard.deals_won}. "
+                            f"Revenue Optimizer achieves {revenue_opt.deals_won} deals. "
+                            f"Each deal generates ~$25K/yr in VAS fees. "
+                            f"Be more aggressive on SaaS discount or try flat_monthly at $600-$700/mo. "
                             "Submit your best attempt — next rejection will be accepted."
                         ),
                     })
@@ -748,9 +765,9 @@ def run_ai_scenario(
                     "tool_call_id": tc.id,
                     "content": result,
                 })
-                rev = _parse_revenue(result)
-                if rev > best_tested_rev:
-                    best_tested_rev = rev
+                score = _parse_score(result)
+                if score > best_tested_score:
+                    best_tested_score = score
                     best_tested = dict(fn_args)
 
     if best_tested:
