@@ -136,14 +136,15 @@ FUNNEL_Q4_RATES = [
 ]
 FUNNEL_Q4_ROI_TO_WIN = 0.58   # Q4 2025 ROI→Win rate (baseline for model)
 
-# Grand total historical rates (Jan 2023 – Jan 2026, for Historical column)
-# Derived: SQL→SQL-H = 8.21/11.31 = 72.6%, SQL-H→SAL = 11.31/23.2 = 48.8%
+# Grand total historical rates (Jan 2023 – Mar 2026, for Historical column)
+# Derived from cumulative: SQL→Win=7.37%, SQL-H→Win=9.78%, SAL→Win=21.09%,
+# ROI→Win=51%, Neg→Win=77.83%
 FUNNEL_HISTORICAL_RATES = [
-    {"from": "SQL",          "to": "SQL-H",        "rate": 0.726},
-    {"from": "SQL-H",        "to": "SAL",          "rate": 0.488},
-    {"from": "SAL",          "to": "ROI",          "rate": 0.4446},
-    {"from": "ROI",          "to": "Negotiation",  "rate": 0.6869},
-    {"from": "Negotiation",  "to": "Won",          "rate": 0.7598},
+    {"from": "SQL",          "to": "SQL-H",        "rate": 0.7536},
+    {"from": "SQL-H",        "to": "SAL",          "rate": 0.4637},
+    {"from": "SAL",          "to": "ROI",          "rate": 0.4134},
+    {"from": "ROI",          "to": "Negotiation",  "rate": 0.6553},
+    {"from": "Negotiation",  "to": "Won",          "rate": 0.7783},
 ]
 
 # ── Teampay Defaults ─────────────────────────────────────────
