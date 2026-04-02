@@ -120,7 +120,7 @@ def main():
                 include_upside_std=cohort["include_upside_std"],
                 upside_total_customers=cohort["upside_total_customers"],
                 vas_recommended_only=cohort["vas_recommended_only"],
-                vas_tam_scenario=cohort["vas_tam_scenario"],
+                vas_tam_scenario=cohort.get("vas_tam_scenario", "base"),
             )
 
         st.session_state["standard"] = standard
