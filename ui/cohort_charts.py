@@ -66,7 +66,13 @@ def render_break_even_chart(
     ai: CohortScenario | None = None,
 ) -> None:
     """Cumulative margin over time with crossover points."""
-    st.markdown("**Cumulative Margin Timeline**")
+    st.subheader("Cumulative Margin Timeline", help=(
+        "Shows how total margin ($) accumulates over 3 years for each scenario. "
+        "Margin = Revenue minus all costs (CC interchange, ACH costs, SaaS COGS, Teampay costs, VAS build costs). "
+        "Break-even points mark where an optimized scenario's cumulative margin first surpasses Standard — "
+        "this tells you how long it takes for the deal count advantage to overcome any per-deal margin trade-off. "
+        "'Ahead from start' means the scenario had higher margin than Standard from Year 1."
+    ))
 
     years = [0, 1, 2, 3]
 
@@ -195,7 +201,13 @@ def render_cumulative_revenue_chart(
     ai: CohortScenario | None = None,
 ) -> None:
     """Cumulative revenue over time — mirrors the margin timeline."""
-    st.markdown("**Cumulative Revenue Timeline**")
+    st.subheader("Cumulative Revenue Timeline", help=(
+        "Shows how total revenue accumulates over 3 years for each scenario. "
+        "Revenue includes SaaS, CC processing, ACH processing, float income, "
+        "implementation fees, Teampay, and VAS fees. "
+        "The gap between lines represents the compounding revenue advantage of winning more deals. "
+        "Scenarios with more deals pull further ahead each year as volume grows and VAS fees compound."
+    ))
 
     years = [0, 1, 2, 3]
 
@@ -257,7 +269,17 @@ def render_revenue_composition(
     ai: CohortScenario | None = None,
 ) -> None:
     """Stacked bar showing revenue mix by year for all three or four scenarios."""
-    st.markdown("**Revenue Composition by Year**")
+    st.subheader("Revenue Composition by Year", help=(
+        "Stacked bars showing where revenue comes from each year, for each scenario side by side. "
+        "SaaS = subscription fees (affected by discount/removal strategy and churn). "
+        "CC = credit card processing revenue (Y1 uses scenario rates; Y2/Y3 revert to standard). "
+        "ACH = ACH processing revenue (accelerated BPS + non-accelerated fixed fees). "
+        "Float = interest earned on funds held during settlement. "
+        "Impl Fee = one-time implementation fee (Y1 only). "
+        "TP SaaS/Proc = Teampay add-on subscription and processing revenue. "
+        "VAS Fees = value-added service fee revenue (scales with deal count). "
+        "Totals shown above each bar. Vertical lines separate year groupings."
+    ))
 
     categories = ["SaaS", "CC", "ACH", "Float", "Impl Fee", "TP SaaS", "TP Proc", "VAS Fees"]
     colors = ["#3498DB", "#1B6AC9", "#2980B9", "#1ABC9C", "#95A5A6", "#9B59B6", "#8E44AD", "#E67E22"]

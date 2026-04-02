@@ -27,12 +27,17 @@ def render_funnel_comparison(
     from models.funnel_model import compute_historical_funnel
     import config as _cfg
 
-    st.subheader("Sales Funnel")
-    st.caption(
-        "Historical = grand-total avg (Jan 2023–Jan 2026). "
-        "Standard = Q4 2025 actual data. "
-        "Shows stage-to-stage conversion rates. SQL → Win at bottom."
-    )
+    st.subheader("Sales Funnel", help=(
+        "Shows how deals flow through the pipeline from SQL to Won. "
+        "Each cell shows the deal count and the conversion rate to the next stage. "
+        "Historical rates are the grand-total average (Jan 2023–Mar 2026). "
+        "Standard uses Q4 2025 actual rates. "
+        "Optimized scenarios apply a graduated improvement factor based on how much "
+        "the pricing-driven win rate exceeds the baseline — heavier weighting on later stages "
+        "(SAL→ROI, ROI→Negotiation, Negotiation→Won). "
+        "SQL→Win at the bottom is the overall pipeline conversion rate. "
+        "Green = above historical benchmark. Red = below."
+    ))
 
     _HIST_CLR = "#808495"
     hist_stages = compute_historical_funnel(_cfg.FUNNEL_SQLS_PER_QUARTER)
@@ -178,7 +183,13 @@ def render_volume_forecast(
     std: CohortScenario, ltv: CohortScenario, top: CohortScenario,
 ) -> None:
     """Volume forecast tables showing 3-year volumes by payment type for all scenarios."""
-    st.subheader("Volume Forecast")
+    st.subheader("Volume Forecast", help=(
+        "Projected payment volumes per deal × deals won, broken out by payment type "
+        "(Card, ACH, Bank). Volumes are derived from real Vol/MRR and Card Vol/MRR ratios "
+        "and grow quarterly at the user-defined growth rate. "
+        "Card Volume % shows the credit card mix, which drives CC processing revenue. "
+        "All scenarios share the same per-deal volume profile — differences come from deal count."
+    ))
 
     def _vol_df(scenario: CohortScenario) -> pd.DataFrame:
         vols = scenario.per_deal_volumes
@@ -221,7 +232,16 @@ def render_summary_metrics(
 ) -> None:
     """Top-level summary: Standard on top, then each optimized scenario with deltas."""
 
-    st.subheader("Cohort Impact Summary")
+    st.subheader("Cohort Impact Summary", help=(
+        "Headline metrics for each pricing scenario applied to the full deal cohort. "
+        "Deals Won = total deals through the sales funnel. "
+        "3-Year Revenue = total cohort revenue across all active deals, accounting for churn and quarterly growth. "
+        "SaaS (ACV) = SaaS subscription revenue only. "
+        "3-Year Margin = Revenue minus all costs (CC interchange, ACH costs, SaaS COGS, Teampay costs). "
+        "Margin % = Margin / Revenue. "
+        "Take Rate = total revenue as a % of total processing volume. "
+        "Delta badges (▲/▼) and % changes show the difference vs Standard."
+    ))
 
     def _delta_badge(label: str, is_pos: bool) -> str:
         bg = "rgba(9,171,59,0.15)" if is_pos else "rgba(255,43,43,0.15)"
@@ -498,12 +518,14 @@ def render_cost_to_collect_ar(
     Assumes 50% of CC volume has convenience fees applied (offset).
     Expressed as a percentage of total processing volume.
     """
-    st.subheader("Cost to Collect AR (Per Deal)")
-    st.caption(
-        "All-in cost to the customer to collect revenue, net of convenience fee offsets. "
-        "Assumes 50% of CC fees are offset by convenience fees passed to end-buyers. "
-        "Lower = more favorable for the customer."
-    )
+    st.subheader("Cost to Collect AR (Per Deal)", help=(
+        "All-in cost to the customer to collect their accounts receivable through Paystand, "
+        "expressed as a % of total processing volume. "
+        "Includes SaaS fees, implementation fees, net CC processing (after 50% convenience fee offset), "
+        "and ACH fees. Lower % = more favorable for the customer. "
+        "Y1 is typically highest due to implementation fees. "
+        "Green = lower cost than Standard. Red = higher cost than Standard."
+    ))
 
     CONV_FEE_OFFSET = 0.50
 
@@ -740,7 +762,15 @@ def render_annualized_impact(
     """
     import plotly.graph_objects as go
 
-    st.markdown("**Annualized Cohort Impact** *(4 quarterly cohorts, staggered 3-year window)*")
+    st.subheader("Annualized Cohort Impact", help=(
+        "Models 4 quarterly cohorts entering over a year (Q1–Q4), each running for 3 years. "
+        "The stacked area chart shows how quarterly revenue builds as cohorts overlap — "
+        "each layer is one cohort's contribution. "
+        "The cumulative line chart below shows total revenue across all 4 cohorts over time. "
+        "The gap between lines represents the compounding advantage of winning more deals "
+        "with optimized pricing across multiple cohorts. "
+        "Summary cards at the bottom show the 4-cohort total revenue, margin, and margin %."
+    ))
 
     def _quarterly_revenue(scenario):
         """Break Y1/Y2/Y3 into 12 quarterly values using real monthly volume weights.
@@ -1052,7 +1082,16 @@ def render_upside_breakdown(
     if not has_upside:
         return
 
-    st.markdown("**Value-Added Services Fees** *(3-year total per cohort, by line item)*")
+    st.subheader("Value-Added Services Fees", help=(
+        "3-year total VAS fee revenue broken down by individual fee item for each scenario. "
+        "VAS fees scale directly with deal count — more deals won = proportionally more VAS revenue. "
+        "Volume-based fees (Transfer/Recon, Payment Failures, Account Updater) scale with "
+        "each deal's payment volume. "
+        "Flat fees are derived from the portfolio-level TAM divided by total active customers. "
+        "The TAM Assumption toggle (Conservative/Base/Aggressive) adjusts the underlying "
+        "market size used for these calculations. "
+        "Items with a 'Cost to Build' have that cost amortized as a one-time Y1 expense per deal."
+    ))
 
     scenarios = [
         ("Standard", std, _STD_CLR),
