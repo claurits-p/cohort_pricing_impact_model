@@ -6,6 +6,10 @@ revenue for each fee stream.  Three items use volume-based models
 (payout, payment failures, account updater); all others use a flat
 per-customer rate derived from TAM_ARR / total_customers.
 
+Supports min/base/max TAM scenarios.  For flat items the selected ARR
+is used directly.  For volume-based items the precise calculation is
+scaled by the ratio of selected TAM to base TAM.
+
 Build costs ($10K one-time for some items) are returned separately
 so the engine can apply them to Y1 only.
 """
@@ -24,16 +28,26 @@ class UpsideYear:
     build_cost: float = 0.0
 
 
+def _get_tam_arr(item: dict, tam_scenario: str) -> float:
+    """Return the ARR value for the selected TAM scenario."""
+    if tam_scenario == "min":
+        return item["min_tam_arr"]
+    elif tam_scenario == "max":
+        return item["max_tam_arr"]
+    return item["tam_mrr"] * 12
+
+
 def compute_upside_per_deal(
     vol: VolumeForecastYear,
     total_customers: int = cfg.UPSIDE_TOTAL_CUSTOMERS,
     recommended_only: bool = False,
+    tam_scenario: str = "base",
 ) -> UpsideYear:
     """Compute VAS fee revenue for a single deal for one year.
 
     Returns per-deal amounts (not yet scaled by deal count / retention).
     Build cost is the total one-time cost for all included items that
-    require product investment, divided across total_customers.
+    require product investment.
     """
     items: dict[str, float] = {}
     build_cost_total = 0.0
@@ -44,21 +58,23 @@ def compute_upside_per_deal(
 
         name = item["name"]
         model = item["model"]
-        tam_arr = item["tam_mrr"] * 12
+        base_arr = item["tam_mrr"] * 12
+        selected_arr = _get_tam_arr(item, tam_scenario)
+        scale = selected_arr / base_arr if base_arr > 0 else 1.0
 
         if model == "volume_payout":
-            rev = vol.total * cfg.UPSIDE_PAYOUT_BPS
+            rev = vol.total * cfg.UPSIDE_PAYOUT_BPS * scale
         elif model == "volume_failures":
             card_txns = vol.cc / cfg.UPSIDE_AVG_CARD_TXN_SIZE if cfg.UPSIDE_AVG_CARD_TXN_SIZE > 0 else 0
             ach_txns = vol.ach / cfg.ACH_AVG_TXN_SIZE if cfg.ACH_AVG_TXN_SIZE > 0 else 0
             bank_txns = vol.bank_network / cfg.ACH_AVG_TXN_SIZE if cfg.ACH_AVG_TXN_SIZE > 0 else 0
             total_txns = card_txns + ach_txns + bank_txns
-            rev = total_txns * cfg.UPSIDE_PAYMENT_FAILURE_RATE * cfg.UPSIDE_PAYMENT_FAILURE_FEE
+            rev = total_txns * cfg.UPSIDE_PAYMENT_FAILURE_RATE * cfg.UPSIDE_PAYMENT_FAILURE_FEE * scale
         elif model == "volume_updater":
             card_txns = vol.cc / cfg.UPSIDE_AVG_CARD_TXN_SIZE if cfg.UPSIDE_AVG_CARD_TXN_SIZE > 0 else 0
-            rev = card_txns * cfg.UPSIDE_ACCOUNT_UPDATER_OPTIN * cfg.UPSIDE_ACCOUNT_UPDATER_FEE
+            rev = card_txns * cfg.UPSIDE_ACCOUNT_UPDATER_OPTIN * cfg.UPSIDE_ACCOUNT_UPDATER_FEE * scale
         else:
-            rev = tam_arr / total_customers
+            rev = selected_arr / total_customers
 
         items[name] = rev
         build_cost_total += item["build_cost"]

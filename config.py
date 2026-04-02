@@ -156,8 +156,8 @@ TEAMPAY_PROCESSING_GROWTH = 0.03   # 3% annual growth on processing volume
 
 # ── Value-Added Services (VAS) Fee Revenue ───────────────────
 # Data-driven list of all fee items with TAM > $0.
-# Each item: name, tam_mrr (portfolio), recommended flag, build_cost,
-# and model type ("volume_payout", "volume_failures", "volume_updater", or "flat").
+# Each item carries tam_mrr (base), min/max ARR ranges from the sheet,
+# recommended flag, build_cost, and model type.
 UPSIDE_TOTAL_CUSTOMERS = 750
 
 # Volume-model constants (used by items with model != "flat")
@@ -169,27 +169,29 @@ UPSIDE_ACCOUNT_UPDATER_OPTIN = 0.50
 UPSIDE_ACCOUNT_UPDATER_FEE = 0.20
 
 VAS_ITEMS = [
-    {"name": "Standard Payout Fee",       "tam_mrr": 400_000, "recommended": True,  "build_cost": 0,      "model": "volume_payout"},
-    {"name": "Instant Payout Fee",        "tam_mrr": 400_000, "recommended": False, "build_cost": 0,      "model": "flat"},
-    {"name": "Invoicing Fee",             "tam_mrr": 250_000, "recommended": False, "build_cost": 10_000, "model": "flat"},
-    {"name": "Account Maintenance",       "tam_mrr": 200_000, "recommended": False, "build_cost": 0,      "model": "flat"},
-    {"name": "Per-User / Seat Fee",       "tam_mrr": 100_000, "recommended": True,  "build_cost": 0,      "model": "flat"},
-    {"name": "Tax Automation Fee",        "tam_mrr": 63_000,  "recommended": False, "build_cost": 10_000, "model": "flat"},
-    {"name": "Buy Now Pay Later",         "tam_mrr": 60_000,  "recommended": False, "build_cost": 10_000, "model": "flat"},
-    {"name": "Dispute Threshold Fee",     "tam_mrr": 35_000,  "recommended": True,  "build_cost": 0,      "model": "flat"},
-    {"name": "PCI Compliance Fee",        "tam_mrr": 21_000,  "recommended": False, "build_cost": 0,      "model": "flat"},
-    {"name": "Premium Support",           "tam_mrr": 20_000,  "recommended": False, "build_cost": 0,      "model": "flat"},
-    {"name": "Recurring Billing Fee",     "tam_mrr": 17_000,  "recommended": False, "build_cost": 0,      "model": "flat"},
-    {"name": "Payment Failures",          "tam_mrr": 15_000,  "recommended": True,  "build_cost": 0,      "model": "volume_failures"},
-    {"name": "Account Updater Fee",       "tam_mrr": 13_500,  "recommended": True,  "build_cost": 0,      "model": "volume_updater"},
-    {"name": "Min Volume Penalties",      "tam_mrr": 10_000,  "recommended": True,  "build_cost": 0,      "model": "flat"},
-    {"name": "Network Token Fee",         "tam_mrr": 5_000,   "recommended": False, "build_cost": 10_000, "model": "flat"},
-    {"name": "Batch Processing Fee",      "tam_mrr": 3_850,   "recommended": False, "build_cost": 0,      "model": "flat"},
-    {"name": "AI Dispute Resolution",     "tam_mrr": 3_600,   "recommended": False, "build_cost": 10_000, "model": "flat"},
-    {"name": "Fraud Screening Fee",       "tam_mrr": 2_600,   "recommended": False, "build_cost": 10_000, "model": "flat"},
-    {"name": "Fee on Refunds",            "tam_mrr": 1_000,   "recommended": False, "build_cost": 0,      "model": "flat"},
-    {"name": "Reporting / Query Cost",    "tam_mrr": 1_000,   "recommended": False, "build_cost": 0,      "model": "flat"},
-    {"name": "Exit Fee",                  "tam_mrr": 250,     "recommended": False, "build_cost": 0,      "model": "flat"},
-    {"name": "KYC/KYB Verification",      "tam_mrr": 100,     "recommended": False, "build_cost": 0,      "model": "flat"},
-    {"name": "Dispute Retrieval Fee",     "tam_mrr": 100,     "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Transfer / Recon Fee",      "tam_mrr": 440_000, "min_tam_arr": 2_640_000, "max_tam_arr": 5_280_000, "recommended": False, "build_cost": 0,      "model": "volume_payout"},
+    {"name": "Invoicing Fee",             "tam_mrr": 250_000, "min_tam_arr": 1_500_000, "max_tam_arr": 3_000_000, "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Instant Payout Fee",        "tam_mrr": 200_000, "min_tam_arr": 1_200_000, "max_tam_arr": 2_400_000, "recommended": True,  "build_cost": 10_000, "model": "flat"},
+    {"name": "Account Maintenance",       "tam_mrr": 200_000, "min_tam_arr": 1_200_000, "max_tam_arr": 2_400_000, "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Per-User / Seat Fee",       "tam_mrr": 100_000, "min_tam_arr":   600_000, "max_tam_arr": 1_200_000, "recommended": True,  "build_cost": 0,      "model": "flat"},
+    {"name": "Tax Automation Fee",        "tam_mrr":  63_000, "min_tam_arr":   378_000, "max_tam_arr":   756_000, "recommended": False, "build_cost": 10_000, "model": "flat"},
+    {"name": "Buy Now Pay Later",         "tam_mrr":  60_000, "min_tam_arr":   360_000, "max_tam_arr":   720_000, "recommended": True,  "build_cost": 10_000, "model": "flat"},
+    {"name": "Premium Support",           "tam_mrr":  50_000, "min_tam_arr":   300_000, "max_tam_arr":   600_000, "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Dispute Threshold Fee",     "tam_mrr":  35_000, "min_tam_arr":   210_000, "max_tam_arr":   420_000, "recommended": True,  "build_cost": 0,      "model": "flat"},
+    {"name": "PCI Compliance Fee",        "tam_mrr":  21_000, "min_tam_arr":   126_000, "max_tam_arr":   252_000, "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Smart Retry",              "tam_mrr":  20_000, "min_tam_arr":   120_000, "max_tam_arr":   240_000, "recommended": True,  "build_cost": 0,      "model": "flat"},
+    {"name": "Min Volume Penalties",      "tam_mrr":  18_000, "min_tam_arr":   108_000, "max_tam_arr":   216_000, "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Recurring Billing Fee",     "tam_mrr":  17_000, "min_tam_arr":   102_000, "max_tam_arr":   204_000, "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Payment Failures",          "tam_mrr":  15_000, "min_tam_arr":    90_000, "max_tam_arr":   180_000, "recommended": True,  "build_cost": 0,      "model": "volume_failures"},
+    {"name": "Account Updater Fee",       "tam_mrr":  13_500, "min_tam_arr":    81_000, "max_tam_arr":   162_000, "recommended": True,  "build_cost": 0,      "model": "volume_updater"},
+    {"name": "Reporting / Query Cost",    "tam_mrr":  12_500, "min_tam_arr":    75_000, "max_tam_arr":   150_000, "recommended": True,  "build_cost": 10_000, "model": "flat"},
+    {"name": "Network Token Fee",         "tam_mrr":   5_000, "min_tam_arr":    30_000, "max_tam_arr":    60_000, "recommended": False, "build_cost": 10_000, "model": "flat"},
+    {"name": "Batch Processing Fee",      "tam_mrr":   3_850, "min_tam_arr":    23_100, "max_tam_arr":    46_200, "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "AI Dispute Resolution",     "tam_mrr":   3_600, "min_tam_arr":    21_600, "max_tam_arr":    43_200, "recommended": True,  "build_cost": 10_000, "model": "flat"},
+    {"name": "Wire Transfer Fee",         "tam_mrr":   3_000, "min_tam_arr":    18_000, "max_tam_arr":    36_000, "recommended": False, "build_cost": 10_000, "model": "flat"},
+    {"name": "Fraud Screening Fee",       "tam_mrr":   2_600, "min_tam_arr":    15_600, "max_tam_arr":    31_200, "recommended": False, "build_cost": 10_000, "model": "flat"},
+    {"name": "Fee on Refunds",            "tam_mrr":   1_000, "min_tam_arr":     6_000, "max_tam_arr":    12_000, "recommended": True,  "build_cost": 0,      "model": "flat"},
+    {"name": "Exit Fee",                  "tam_mrr":     250, "min_tam_arr":     1_500, "max_tam_arr":     3_000, "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "KYC/KYB Verification",      "tam_mrr":     100, "min_tam_arr":       600, "max_tam_arr":     1_200, "recommended": False, "build_cost": 0,      "model": "flat"},
+    {"name": "Dispute Retrieval Fee",     "tam_mrr":     100, "min_tam_arr":       600, "max_tam_arr":     1_200, "recommended": False, "build_cost": 0,      "model": "flat"},
 ]

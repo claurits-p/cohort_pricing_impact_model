@@ -73,7 +73,15 @@ def render_cohort_inputs() -> dict:
             disabled=not include_upside)
         if include_upside:
             vas_recommended_only = st.toggle("Recommended Only", value=False,
-                help="Show only the 6 recommended VAS fee items instead of all 23.")
+                help="Show only the 10 recommended VAS fee items instead of all 25.")
+            vas_tam_scenario = st.radio(
+                "TAM Assumption",
+                options=["min", "base", "max"],
+                format_func=lambda x: {"min": "Conservative (Min)", "base": "Base", "max": "Aggressive (Max)"}[x],
+                index=1,
+                horizontal=True,
+                help="Min/Max ranges from the AR Competitor Fee Matrix.",
+            )
             upside_total_customers = st.number_input(
                 "Total Active Customers",
                 min_value=100, value=750, step=50,
@@ -81,6 +89,7 @@ def render_cohort_inputs() -> dict:
             )
         else:
             vas_recommended_only = False
+            vas_tam_scenario = "base"
             upside_total_customers = 750
     if not include_float:
         include_float_std = False
@@ -138,6 +147,7 @@ def render_cohort_inputs() -> dict:
         "include_upside_std": include_upside_std,
         "upside_total_customers": upside_total_customers,
         "vas_recommended_only": vas_recommended_only,
+        "vas_tam_scenario": vas_tam_scenario,
     }
 
 

@@ -116,6 +116,7 @@ def _scale_yearly(
     include_upside: bool = False,
     upside_total_customers: int = cfg.UPSIDE_TOTAL_CUSTOMERS,
     vas_recommended_only: bool = False,
+    vas_tam_scenario: str = "base",
     per_deal_volumes: dict | None = None,
 ) -> tuple[dict[int, CohortYearMetrics], dict | None]:
     if ret_factors is None:
@@ -148,6 +149,7 @@ def _scale_yearly(
             up = compute_upside_per_deal(
                 per_deal_volumes[y], upside_total_customers,
                 recommended_only=vas_recommended_only,
+                tam_scenario=vas_tam_scenario,
             )
             up_rev = up.total * active
             upside_detail[y] = {name: val * active for name, val in up.items.items()}
@@ -199,6 +201,7 @@ def _build_cohort_scenario(
     include_upside: bool = False,
     upside_total_customers: int = cfg.UPSIDE_TOTAL_CUSTOMERS,
     vas_recommended_only: bool = False,
+    vas_tam_scenario: str = "base",
 ) -> CohortScenario:
     cohort_yearly, upside_detail = _scale_yearly(
         per_deal_yearly, deals_won,
@@ -207,6 +210,7 @@ def _build_cohort_scenario(
         tp_free_y1_saas=tp_free_y1_saas,
         include_upside=include_upside, upside_total_customers=upside_total_customers,
         vas_recommended_only=vas_recommended_only,
+        vas_tam_scenario=vas_tam_scenario,
         per_deal_volumes=per_deal_volumes,
     )
     total_rev = sum(cy.total_revenue for cy in cohort_yearly.values())
@@ -251,6 +255,7 @@ def run_cohort_comparison(
     include_upside_std: bool = False,
     upside_total_customers: int = cfg.UPSIDE_TOTAL_CUSTOMERS,
     vas_recommended_only: bool = False,
+    vas_tam_scenario: str = "base",
 ) -> tuple[CohortScenario, CohortScenario, CohortScenario, str]:
     """
     Run Standard + two optimizer scenarios with full funnel model.
@@ -297,7 +302,7 @@ def run_cohort_comparison(
         tp_optin=opt_tp_optin, tp_usage=opt_tp_usage,
         tp_monthly_vol=tp_monthly_volume,
         include_upside=include_upside_std, upside_total_customers=upside_total_customers,
-        vas_recommended_only=vas_recommended_only,
+        vas_recommended_only=vas_recommended_only, vas_tam_scenario=vas_tam_scenario,
     )
     standard.funnel = std_funnel
 
@@ -319,7 +324,7 @@ def run_cohort_comparison(
         tp_optin=opt_tp_optin, tp_usage=opt_tp_usage,
         tp_monthly_vol=tp_monthly_volume,
         include_upside=include_upside, upside_total_customers=upside_total_customers,
-        vas_recommended_only=vas_recommended_only,
+        vas_recommended_only=vas_recommended_only, vas_tam_scenario=vas_tam_scenario,
     )
     revenue_opt.funnel = rev_funnel
 
@@ -341,7 +346,7 @@ def run_cohort_comparison(
         tp_optin=opt_tp_optin, tp_usage=opt_tp_usage,
         tp_monthly_vol=tp_monthly_volume,
         include_upside=include_upside, upside_total_customers=upside_total_customers,
-        vas_recommended_only=vas_recommended_only,
+        vas_recommended_only=vas_recommended_only, vas_tam_scenario=vas_tam_scenario,
     )
     margin_opt.funnel = mar_funnel
 
@@ -373,6 +378,7 @@ def build_ai_scenario(
     include_upside: bool = False,
     upside_total_customers: int = cfg.UPSIDE_TOTAL_CUSTOMERS,
     vas_recommended_only: bool = False,
+    vas_tam_scenario: str = "base",
 ) -> CohortScenario:
     """Build a full CohortScenario from AI-proposed pricing levers.
 
@@ -432,7 +438,7 @@ def build_ai_scenario(
         tp_optin=opt_tp_optin, tp_usage=opt_tp_usage,
         tp_monthly_vol=tp_monthly_volume,
         include_upside=include_upside, upside_total_customers=upside_total_customers,
-        vas_recommended_only=vas_recommended_only,
+        vas_recommended_only=vas_recommended_only, vas_tam_scenario=vas_tam_scenario,
     )
     scenario.funnel = ai_funnel
     return scenario
