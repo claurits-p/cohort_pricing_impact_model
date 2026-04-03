@@ -65,6 +65,7 @@ from ui.cohort_charts import (
     render_cumulative_revenue_chart,
     render_revenue_composition,
     render_insight_callouts,
+    render_exit_arr,
 )
 from models.ai_agent import run_ai_scenario
 
@@ -289,6 +290,9 @@ def main():
     if has_vas:
         st.divider()
         render_upside_breakdown(standard, revenue_opt, margin_opt, ai=ai_scenario)
+
+    st.divider()
+    render_exit_arr(standard, revenue_opt, margin_opt, ai=ai_scenario)
 
 
 if __name__ == "__main__":

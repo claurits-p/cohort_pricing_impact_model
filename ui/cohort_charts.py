@@ -411,3 +411,84 @@ def render_insight_callouts(
         f'$ Margin <b>${top_rev:+,.0f}</b></div>',
         unsafe_allow_html=True,
     )
+
+
+def render_exit_arr(
+    std: CohortScenario,
+    ltv: CohortScenario,
+    top: CohortScenario,
+    ai: CohortScenario | None = None,
+) -> None:
+    """Grouped bar chart showing Exit ARR (annualized Q4 run-rate) at end of each year."""
+    from models.volume_forecast import MONTHLY_VOL_MRR
+
+    st.subheader("Exit ARR by Year", help=(
+        "Exit ARR = the annualized recurring run-rate at the END of each year. "
+        "Calculated as Q4 quarterly revenue × 4, reflecting actual churn, growth, "
+        "and retention at that point in time. "
+        "Excludes one-time implementation fees. "
+        "Includes: SaaS, CC processing, ACH processing, Float income, "
+        "Teampay, and VAS fees. "
+        "This answers: 'What would this cohort generate over the next 12 months "
+        "based on where they stand at year-end?'"
+    ))
+
+    def _quarterly_recurring(scenario):
+        q_rev = []
+        for y in [1, 2, 3]:
+            m_start = (y - 1) * 12 + 1
+            year_monthly = [MONTHLY_VOL_MRR.get(m, 0) for m in range(m_start, m_start + 12)]
+            year_total_ratio = sum(year_monthly)
+
+            qtr_weights = []
+            for q in range(4):
+                qw = sum(year_monthly[q * 3: q * 3 + 3])
+                qtr_weights.append(qw / year_total_ratio if year_total_ratio > 0 else 0.25)
+
+            cy = scenario.cohort_yearly[y]
+            saas_q = cy.saas_revenue / 4
+            tp_q = (cy.teampay_saas_revenue + cy.teampay_processing_revenue) / 4
+            upside_q = cy.upside_revenue / 4
+            processing_rev = cy.cc_revenue + cy.ach_revenue + cy.bank_revenue + cy.float_income
+
+            for q in range(4):
+                q_rev.append(saas_q + tp_q + upside_q + processing_rev * qtr_weights[q])
+
+        return q_rev
+
+    scenarios = [
+        ("Standard", std, STD_COLOR),
+        ("Revenue Optimized", ltv, REV_COLOR),
+        ("$ Margin Optimized", top, MAR_COLOR),
+    ]
+    if ai is not None:
+        scenarios.append(("AI Recommended", ai, AI_COLOR))
+
+    x_labels = ["Y1 Exit", "Y2 Exit", "Y3 Exit"]
+    q4_indices = [3, 7, 11]
+
+    fig = go.Figure()
+    for label, scenario, color in scenarios:
+        q_rev = _quarterly_recurring(scenario)
+        exit_arrs = [q_rev[i] * 4 for i in q4_indices]
+        fig.add_trace(go.Bar(
+            x=x_labels,
+            y=exit_arrs,
+            name=label,
+            marker_color=color,
+            text=[f"${v:,.0f}" for v in exit_arrs],
+            textposition="outside",
+            textfont=dict(size=12),
+        ))
+
+    fig.update_layout(
+        barmode="group",
+        yaxis=dict(tickformat="$,.0f", title="Exit ARR ($)"),
+        xaxis=dict(tickfont=dict(size=14, weight="bold")),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=13)),
+        margin=dict(t=50, b=40),
+        height=450,
+        plot_bgcolor="white",
+    )
+    fig.update_yaxes(gridcolor="rgba(0,0,0,0.06)")
+    st.plotly_chart(fig, use_container_width=True)
