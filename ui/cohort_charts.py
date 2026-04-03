@@ -419,7 +419,7 @@ def render_exit_arr(
     top: CohortScenario,
     ai: CohortScenario | None = None,
 ) -> None:
-    """Grouped bar chart showing Exit ARR (annualized Q4 run-rate) at end of each year."""
+    """Stacked bar chart showing Exit ARR by revenue component at end of each year."""
     from models.volume_forecast import MONTHLY_VOL_MRR
 
     st.subheader("Exit ARR by Year", help=(
@@ -427,67 +427,110 @@ def render_exit_arr(
         "Calculated as Q4 quarterly revenue × 4, reflecting actual churn, growth, "
         "and retention at that point in time. "
         "Excludes one-time implementation fees. "
-        "Includes: SaaS, CC processing, ACH processing, Float income, "
+        "Stacked bars show the revenue composition: SaaS, CC, ACH, Float, "
         "Teampay, and VAS fees. "
         "This answers: 'What would this cohort generate over the next 12 months "
-        "based on where they stand at year-end?'"
+        "based on where they stand at year-end, and where does it come from?'"
     ))
 
-    def _quarterly_recurring(scenario):
-        q_rev = []
-        for y in [1, 2, 3]:
-            m_start = (y - 1) * 12 + 1
-            year_monthly = [MONTHLY_VOL_MRR.get(m, 0) for m in range(m_start, m_start + 12)]
-            year_total_ratio = sum(year_monthly)
+    def _q4_components(scenario, y):
+        """Return annualized (×4) revenue components for Q4 of a given year."""
+        m_start = (y - 1) * 12 + 1
+        year_monthly = [MONTHLY_VOL_MRR.get(m, 0) for m in range(m_start, m_start + 12)]
+        year_total_ratio = sum(year_monthly)
+        q4_weight = (
+            sum(year_monthly[9:12]) / year_total_ratio
+            if year_total_ratio > 0 else 0.25
+        )
 
-            qtr_weights = []
-            for q in range(4):
-                qw = sum(year_monthly[q * 3: q * 3 + 3])
-                qtr_weights.append(qw / year_total_ratio if year_total_ratio > 0 else 0.25)
+        cy = scenario.cohort_yearly[y]
+        return {
+            "SaaS": cy.saas_revenue / 4 * 4,
+            "CC": cy.cc_revenue * q4_weight * 4,
+            "ACH": cy.ach_revenue * q4_weight * 4,
+            "Float": cy.float_income * q4_weight * 4,
+            "Teampay": (cy.teampay_saas_revenue + cy.teampay_processing_revenue) / 4 * 4,
+            "VAS Fees": cy.upside_revenue / 4 * 4,
+        }
 
-            cy = scenario.cohort_yearly[y]
-            saas_q = cy.saas_revenue / 4
-            tp_q = (cy.teampay_saas_revenue + cy.teampay_processing_revenue) / 4
-            upside_q = cy.upside_revenue / 4
-            processing_rev = cy.cc_revenue + cy.ach_revenue + cy.bank_revenue + cy.float_income
-
-            for q in range(4):
-                q_rev.append(saas_q + tp_q + upside_q + processing_rev * qtr_weights[q])
-
-        return q_rev
+    categories = ["SaaS", "CC", "ACH", "Float", "Teampay", "VAS Fees"]
+    cat_colors = ["#3498DB", "#1B6AC9", "#2980B9", "#1ABC9C", "#9B59B6", "#E67E22"]
 
     scenarios = [
         ("Standard", std, STD_COLOR),
-        ("Revenue Optimized", ltv, REV_COLOR),
-        ("$ Margin Optimized", top, MAR_COLOR),
+        ("Revenue Opt", ltv, REV_COLOR),
+        ("$ Margin Opt", top, MAR_COLOR),
     ]
     if ai is not None:
-        scenarios.append(("AI Recommended", ai, AI_COLOR))
+        scenarios.append(("AI Rec", ai, AI_COLOR))
 
-    x_labels = ["Y1 Exit", "Y2 Exit", "Y3 Exit"]
-    q4_indices = [3, 7, 11]
+    n = len(scenarios)
+    if ai is not None:
+        x_labels = [
+            "Std Y1", "Rev Y1", "$Mar Y1", "AI Y1",
+            "Std Y2", "Rev Y2", "$Mar Y2", "AI Y2",
+            "Std Y3", "Rev Y3", "$Mar Y3", "AI Y3",
+        ]
+    else:
+        x_labels = [
+            "Std Y1", "Rev Y1", "$Mar Y1",
+            "Std Y2", "Rev Y2", "$Mar Y2",
+            "Std Y3", "Rev Y3", "$Mar Y3",
+        ]
+
+    _label_color_map = {"Std": STD_COLOR, "Rev": REV_COLOR, "$Mar": MAR_COLOR, "AI": AI_COLOR}
+    def _tick_color(lab):
+        for prefix, color in _label_color_map.items():
+            if lab.startswith(prefix):
+                return color
+        return "#333"
+
+    all_components = []
+    for y in [1, 2, 3]:
+        for _, scenario, _ in scenarios:
+            all_components.append(_q4_components(scenario, y))
 
     fig = go.Figure()
-    for label, scenario, color in scenarios:
-        q_rev = _quarterly_recurring(scenario)
-        exit_arrs = [q_rev[i] * 4 for i in q4_indices]
+    for i, cat in enumerate(categories):
+        y_vals = [comp[cat] for comp in all_components]
+        texts = [f"${v:,.0f}" if v > 30_000 else "" for v in y_vals]
         fig.add_trace(go.Bar(
-            x=x_labels,
-            y=exit_arrs,
-            name=label,
-            marker_color=color,
-            text=[f"${v:,.0f}" for v in exit_arrs],
-            textposition="outside",
-            textfont=dict(size=12),
+            x=x_labels, y=y_vals,
+            name=cat, marker_color=cat_colors[i],
+            text=texts, textposition="inside",
+            textfont=dict(color="white", size=11),
         ))
 
+    bar_totals = [sum(comp.values()) for comp in all_components]
+    for i, (label, total) in enumerate(zip(x_labels, bar_totals)):
+        fig.add_annotation(
+            x=label, y=total,
+            text=f"<b>${total:,.0f}</b>",
+            showarrow=False, yshift=12,
+            font=dict(size=11, color=_tick_color(label)),
+        )
+
+    if ai is not None:
+        for x_pos in [3.5, 7.5]:
+            fig.add_vline(x=x_pos, line_dash="dot", line_color="#ccc", line_width=1)
+    else:
+        for x_pos in [2.5, 5.5]:
+            fig.add_vline(x=x_pos, line_dash="dot", line_color="#ccc", line_width=1)
+
     fig.update_layout(
-        barmode="group",
+        barmode="stack",
         yaxis=dict(tickformat="$,.0f", title="Exit ARR ($)"),
-        xaxis=dict(tickfont=dict(size=14, weight="bold")),
+        xaxis=dict(
+            tickfont=dict(size=13, weight="bold"),
+            tickvals=list(range(len(x_labels))),
+            ticktext=[
+                f'<span style="color:{_tick_color(lab)}">{lab}</span>'
+                for lab in x_labels
+            ],
+        ),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=13)),
         margin=dict(t=50, b=40),
-        height=450,
+        height=550,
         plot_bgcolor="white",
     )
     fig.update_yaxes(gridcolor="rgba(0,0,0,0.06)")
