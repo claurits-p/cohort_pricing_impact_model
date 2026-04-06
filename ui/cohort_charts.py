@@ -422,15 +422,15 @@ def render_exit_arr(
     """Stacked bar chart showing Exit ARR by revenue component at end of each year."""
     from models.volume_forecast import MONTHLY_VOL_MRR
 
-    st.subheader("Exit ARR by Year", help=(
-        "Exit ARR = the annualized recurring run-rate at the END of each year. "
-        "Calculated as Q4 quarterly revenue × 4, reflecting actual churn, growth, "
-        "and retention at that point in time. "
+    st.subheader("Exit ARR by Year (Single Quarterly Cohort)", help=(
+        "Exit ARR for ONE quarterly cohort (not accumulated across multiple cohorts). "
+        "Annualized recurring run-rate at the END of each year, calculated as "
+        "Q4 quarterly revenue × 4, reflecting actual churn, growth, and retention. "
         "Excludes one-time implementation fees. "
         "Stacked bars show the revenue composition: SaaS, CC, ACH, Float, "
         "Teampay, and VAS fees. "
-        "This answers: 'What would this cohort generate over the next 12 months "
-        "based on where they stand at year-end, and where does it come from?'"
+        "SaaS:Fees ratio shown below each bar = SaaS / (CC + ACH). "
+        "A 1:1 ratio means equal SaaS and processing fee revenue."
     ))
 
     def _q4_components(scenario, y):
@@ -503,11 +503,20 @@ def render_exit_arr(
 
     bar_totals = [sum(comp.values()) for comp in all_components]
     for i, (label, total) in enumerate(zip(x_labels, bar_totals)):
+        saas = all_components[i]["SaaS"]
+        fees = all_components[i]["CC"] + all_components[i]["ACH"]
+        ratio = fees / saas if saas > 0 else 0
         fig.add_annotation(
             x=label, y=total,
             text=f"<b>${total:,.0f}</b>",
             showarrow=False, yshift=12,
             font=dict(size=11, color=_tick_color(label)),
+        )
+        fig.add_annotation(
+            x=label, y=0,
+            text=f"SaaS:Fees 1:{ratio:.1f}",
+            showarrow=False, yshift=-16,
+            font=dict(size=10, color="#808495"),
         )
 
     if ai is not None:
@@ -529,8 +538,8 @@ def render_exit_arr(
             ],
         ),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=13)),
-        margin=dict(t=50, b=40),
-        height=550,
+        margin=dict(t=50, b=60),
+        height=570,
         plot_bgcolor="white",
     )
     fig.update_yaxes(gridcolor="rgba(0,0,0,0.06)")
